@@ -1,6 +1,7 @@
 <div align="center">
 
 # HAI-Wire
+<img width="1727" height="1046" alt="Screenshot 2026-04-07 at 7 23 28 PM" src="https://github.com/user-attachments/assets/1f5ecfc4-8aeb-4402-8726-f120ed5ec4f9" />
 
 **Hot-wire support requests to the right squad.**
 
