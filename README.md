@@ -1,38 +1,58 @@
+<div align="center">
+
 # HAI-Wire
 
 **Hot-wire support requests to the right squad.**
 
-HAI-Wire is a desktop app that monitors the `#hai-support` Slack channel, classifies incoming support requests using Claude, and routes relevant ones to your squad's triage channel with confidence scoring. Built for HandshakeAI teams -- any squad can fork this repo, run the app, and configure it for their domain through a guided setup wizard.
+[![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
+[![Wails](https://img.shields.io/badge/Wails-v2-DF0000?style=flat-square)](https://wails.io)
+[![Claude](https://img.shields.io/badge/Claude-AI-D97706?style=flat-square)](https://anthropic.com)
 
-<!-- Screenshot: App overview showing the Live Feed with classified messages -->
-<!-- TODO: Add screenshot of the main Live Feed view here -->
-<!-- Recommended size: 1200x800, PNG format -->
+A native desktop app that monitors Slack support channels, classifies requests with Claude AI, and routes them to your squad's triage channel -- with confidence scoring, review queues, and auto-approval rules.
+
+Built for **HandshakeAI** teams. Forkable by any squad.
+
+<!-- TODO: Add hero screenshot of the Live Feed view (1200x800 PNG) -->
+<!-- ![HAI-Wire Live Feed](docs/screenshots/hero.png) -->
+
+</div>
+
+---
+
+## Why HAI-Wire?
+
+Support channels are noisy. Requests meant for your squad get buried. Manual triage is slow and inconsistent. HAI-Wire fixes this by:
+
+- **Classifying every post** with Claude AI into specific issue categories
+- **Routing only what's yours** to your squad's triage channel with confidence scores
+- **Queueing for review** so nothing gets auto-posted without approval
+- **Working locally** -- no servers, no infrastructure, runs on your machine
 
 ---
 
 ## How It Works
 
-1. **Watches** a Slack channel for new support posts (via Socket Mode)
-2. **Classifies** each post into one of 27 known issue categories using Claude
-3. **Routes** matching posts to your squad's triage channel with a confidence score
-4. **Replies** in-thread on the original post confirming the request has been analyzed
+```
+   #hai-support                    HAI-Wire                        Your Squad
+  ┌─────────────┐    polls     ┌──────────────┐    routes     ┌────────────────┐
+  │ New support  │ ──────────> │  Claude AI    │ ──────────> │ #squad-triage   │
+  │ request      │  every 30s  │  classifies   │  if approved │ with confidence │
+  │ posted       │             │  + scores     │              │ score + summary │
+  └─────────────┘             └──────────────┘              └────────────────┘
+                                     │
+                                     v
+                              ┌──────────────┐
+                              │ Review Queue  │
+                              │ approve/skip  │
+                              └──────────────┘
+```
 
-```
-New message in #hai-support
-        |
-        v
-   Claude classifies it
-        |
-        v
-  "onboarding_blocker" (92% confidence)
-        |
-   +----+----+
-   |         |
-   v         v
-Thread    Triage channel
-reply     with details +
-          @squad-on-call
-```
+1. **Monitors** a Slack channel by polling for new messages
+2. **Classifies** each post into configurable issue categories using Claude
+3. **Queues** matching posts for your review (or auto-approves based on rules)
+4. **Routes** approved posts to your triage channel with a clickable @mention
+5. **Tracks** everything -- confidence scores, routing history, stats
 
 ---
 
@@ -40,122 +60,139 @@ reply     with details +
 
 ### Prerequisites
 
-- [Go 1.24+](https://go.dev/dl/)
-- [Node.js 18+](https://nodejs.org/)
-- [Wails v2](https://wails.io/docs/gettingstarted/installation)
-- A Slack app with Socket Mode enabled (see [Slack Setup](#slack-app-setup))
-- An [Anthropic API key](https://console.anthropic.com/)
+| Requirement | Version | Purpose |
+|------------|---------|---------|
+| [Go](https://go.dev/dl/) | 1.24+ | Backend |
+| [Node.js](https://nodejs.org/) | 18+ | Frontend build |
+| [Wails](https://wails.io/docs/gettingstarted/installation) | v2 | Desktop framework |
+| [Claude Code](https://claude.ai/code) | Latest | Slack MCP connection |
+| [Anthropic API Key](https://console.anthropic.com/) | -- | AI classification |
 
 ### Install & Run
 
 ```bash
-# Clone the repo
 git clone https://github.com/ddvorkin14/hai-wire.git
 cd hai-wire
-
-# Run in dev mode
 wails dev
-
-# Or build a production binary
-wails build
 ```
 
-The app opens and walks you through the setup wizard on first launch.
+That's it. The app opens and guides you through setup.
+
+> **Slack connection:** HAI-Wire uses your Claude Code Slack MCP connection -- no bot tokens or OAuth setup needed. Just make sure you've connected Slack in Claude Code first (`/mcp`).
+
+### Build for Distribution
+
+```bash
+wails build
+# Binary output: build/bin/hai-wire (macOS) or build/bin/hai-wire.exe (Windows)
+```
 
 ---
 
-## Setup Wizard
-
-The wizard runs on first launch and walks through 7 steps. No config files to edit -- everything is configured through the UI.
-
-### Step 1: Connect Slack
-
-Enter your Slack Bot Token (`xoxb-...`) and App Token (`xapp-...`). The app validates the connection and shows your workspace name.
-
-<!-- Screenshot: Step 1 - Slack connection with workspace name confirmed -->
-<!-- TODO: Add screenshot here -->
-
-### Step 2: Connect Claude
-
-Enter your Anthropic API key (`sk-ant-...`).
-
-### Step 3: Pick Watch Channel
-
-Select the Slack channel to monitor from a dropdown. Use a test channel like `#test-hai-support` to start.
-
-<!-- Screenshot: Step 3 - Channel dropdown -->
-<!-- TODO: Add screenshot here -->
-
-### Step 4: Set Up Your Squad
-
-- **Squad Name** -- e.g., `hai-conversion`
-- **Ping Group** -- the Slack handle to notify, e.g., `@hai-conversion-on-call`
-- **Triage Channel** -- where routed messages go, e.g., `#hai-conv-support-triage`
-
-### Step 5: Choose Categories
-
-Check the issue types your squad owns from the list of 27 categories. For example, `hai-conversion` owns "Onboarding Blockers."
-
-<!-- Screenshot: Step 5 - Category checklist with some items selected -->
-<!-- TODO: Add screenshot here -->
-
-### Step 6: Confidence Threshold
-
-Set how confident the classifier needs to be before routing to your triage channel. Default is 50%.
-
-- **80-100%** -- High confidence, almost certainly your squad
-- **50-79%** -- Medium, likely but not certain
-- **Below 50%** -- Low, will include more false positives
-
-### Step 7: Review & Start
-
-Review all settings and hit "Start Monitoring."
-
-<!-- Screenshot: Step 7 - Review screen showing all configured settings -->
-<!-- TODO: Add screenshot here -->
-
----
-
-## App Views
+## Features
 
 ### Live Feed
 
-Real-time display of classified messages from the watched channel. Each message shows:
-- Author and timestamp
-- Detected category
-- Confidence badge (color-coded green/yellow/red)
-- Claude-generated summary
-- "Routed" indicator if sent to triage
+Real-time classified message feed with search, filters, and auto-refresh.
 
-<!-- Screenshot: Live Feed with several classified messages showing different confidence levels -->
-<!-- TODO: Add screenshot here -->
+<!-- TODO: Add screenshot of Live Feed (1200x800 PNG) -->
+<!-- ![Live Feed](docs/screenshots/live-feed.png) -->
+
+- **Auto-refresh** with configurable interval (5s / 10s / 30s / 1m / 5m)
+- **Countdown timer** shows time until next refresh
+- **Search** across author, summary, and category
+- **Filter** by category, confidence level (high/medium/low), and route status
+- **Confidence reasoning** shown inline on every card -- explains *why* the AI scored it that way
+- **Manual routing** -- send any message to the review queue with one click
+- **Undo routing** -- revert a routed message back to unrouted
+- **Stats bar** -- scanned, routed, high/medium/low confidence at a glance
+
+### Review Queue
+
+Nothing gets posted to Slack without your approval (unless you set up auto-approval rules).
+
+<!-- TODO: Add screenshot of Review Queue (1200x800 PNG) -->
+<!-- ![Review Queue](docs/screenshots/review-queue.png) -->
+
+- **Approve & Route** -- posts to triage channel with @mention
+- **Skip** -- rejects without posting
+- **Approve All** -- bulk approve pending items
+- **Auto-Approval Rules** -- set rules by category + minimum confidence (e.g., "auto-approve onboarding_blocker at 90%+")
+
+### Custom Categories via Document Upload
+
+Don't want the built-in categories? Upload your own runbook and let Claude generate categories from it.
+
+<!-- TODO: Add screenshot of Runbook upload step (1200x800 PNG) -->
+<!-- ![Runbook Upload](docs/screenshots/runbook.png) -->
+
+- Upload a `.txt` or `.md` file, or paste text directly
+- Claude extracts categories with keys, names, and descriptions
+- Review and select which categories to keep
+- Reset to defaults anytime
 
 ### Settings
 
-All wizard settings, editable at any time. Changes take effect immediately.
+Everything is configurable through the UI. No config files.
 
-<!-- Screenshot: Settings panel -->
-<!-- TODO: Add screenshot here -->
+<!-- TODO: Add screenshot of Settings page (1200x800 PNG) -->
+<!-- ![Settings](docs/screenshots/settings.png) -->
 
-### Activity Log
+| Setting | Description |
+|---------|-------------|
+| **Slack Connection** | Auto-connects via Claude Code keychain |
+| **Claude API Key** | For AI classification |
+| **Watch Channel** | Source channel to monitor |
+| **Triage Channel** | Destination for routed requests |
+| **Squad Name** | Your team's name |
+| **Ping Target** | Searchable dropdown of all workspace users and groups |
+| **Confidence Threshold** | Slider (10-100%) with visual guide |
+| **Ack Reply** | Toggle thread replies on/off (off by default) |
+| **Owned Categories** | Checkboxes for which categories your squad handles |
+| **Test Buttons** | Verify channel connections without sending messages |
 
-Historical view of all processed messages with stats:
-- Messages processed
-- Messages routed
-- Average confidence
+### Setup Dashboard
 
-<!-- Screenshot: Activity Log with stats and table -->
-<!-- TODO: Add screenshot here -->
+Non-linear setup -- complete steps in any order. Perfect when some steps need external approvals.
+
+<!-- TODO: Add screenshot of Setup Dashboard (1200x800 PNG) -->
+<!-- ![Setup](docs/screenshots/setup.png) -->
+
+- 7 setup cards: Slack, Claude API, Watch Channel, Squad, Runbook, Categories, Confidence
+- Each card shows Done/Todo status
+- Progress bar at the top
+- Setup banner appears in main app if incomplete
 
 ---
 
-## What Gets Posted
+## Slack Connection
 
-### Thread Reply (on the original message)
+HAI-Wire connects to Slack through **Claude Code's MCP integration** -- the same connection you use in your terminal. No bot tokens, no OAuth apps, no admin access needed.
 
-> This support request has been analyzed and the appropriate team has been notified.
+### How it works
 
-### Triage Channel Post
+1. Connect Slack in Claude Code by running `/mcp`
+2. HAI-Wire reads the stored token from your macOS keychain
+3. Messages are read and posted using Slack's API with that token
+
+### What it can do
+
+| Action | Works? | Notes |
+|--------|--------|-------|
+| Read channel messages | Yes | `channels:history` scope |
+| Post messages | Yes | `chat:write` scope |
+| Look up user names | Yes | `users:read` scope |
+| List all workspace users | Yes | Paginated via raw HTTP |
+| List channels | No | Enterprise Grid limitation |
+| List user groups | No | Missing `usergroups:read` scope |
+
+> **Channel IDs:** Since channel listing doesn't work on Enterprise Grid, you enter channel IDs manually. Find a channel ID by clicking the channel name in Slack and scrolling to the bottom of the info panel.
+
+---
+
+## Triage Message Format
+
+When a request is approved and routed, this is what gets posted to your triage channel:
 
 ```
 🟢 [Confidence: 92%] Onboarding Blockers
@@ -163,222 +200,220 @@ Historical view of all processed messages with stats:
 Summary: Fellow stuck on 'Setting up your profile' loading screen
 after KYC verification.
 
-Original post: <link>
+Original post: https://slack.com/archives/C08MXC8URS8/p1775514637600389
 Posted by: Jane Doe
 
 @hai-conversion-on-call
 ```
 
----
-
-## Slack App Setup
-
-HAI-Wire needs two tokens from a Slack app: a **Bot Token** (`xoxb-...`) and an **App Token** (`xapp-...`). Here's how to get both.
-
-### Option A: Use an existing Slack app
-
-If you already have a Slack app, you just need to make sure it has the right scopes and Socket Mode enabled. Skip to [Add Required Scopes](#2-add-required-scopes).
-
-### Option B: Create a new Slack app
-
-#### 1. Create the app
-
-1. Go to [api.slack.com/apps](https://api.slack.com/apps)
-2. Click **Create New App** > **From scratch**
-3. Name it something like `HAI-Wire` and select your workspace
-4. Click **Create App**
-
-#### 2. Add required scopes
-
-1. In the left sidebar, click **OAuth & Permissions**
-2. Scroll down to **Scopes** > **Bot Token Scopes**
-3. Click **Add an OAuth Scope** and add each of these:
-
-| Scope | What it does |
-|-------|-------------|
-| `channels:history` | Lets the bot read messages in channels it's added to |
-| `channels:read` | Lets the bot list channels (for the setup wizard dropdown) |
-| `chat:write` | Lets the bot post thread replies and triage messages |
-| `users:read` | Lets the bot look up who posted a message |
-
-#### 3. Install the app to your workspace
-
-1. Still on **OAuth & Permissions**, scroll up and click **Install to Workspace**
-2. Click **Allow** on the permissions screen
-3. Copy the **Bot User OAuth Token** -- this is your `xoxb-...` token
-
-> This is the first token HAI-Wire asks for in the setup wizard.
-
-#### 4. Enable Socket Mode
-
-1. In the left sidebar, click **Socket Mode**
-2. Toggle **Enable Socket Mode** to on
-3. You'll be prompted to create an **App-Level Token**
-   - Name it anything (e.g., `hai-wire-socket`)
-   - Add the `connections:write` scope
-   - Click **Generate**
-4. Copy the token -- this is your `xapp-...` token
-
-> This is the second token HAI-Wire asks for in the setup wizard.
-
-#### 5. Subscribe to message events
-
-1. In the left sidebar, click **Event Subscriptions**
-2. Toggle **Enable Events** to on
-3. Under **Subscribe to bot events**, click **Add Bot User Event**
-4. Add `message.channels`
-5. Click **Save Changes**
-
-#### 6. Add the bot to your channel
-
-The bot can only see messages in channels it's been added to.
-
-1. Go to the Slack channel you want to monitor (e.g., `#test-hai-support`)
-2. Type `/invite @HAI-Wire` (or whatever you named your app)
-
-That's it -- you now have both tokens and the bot is ready to receive messages.
-
-### Where to find your tokens later
-
-| Token | Where to find it |
-|-------|-----------------|
-| Bot Token (`xoxb-...`) | [api.slack.com/apps](https://api.slack.com/apps) > Your App > **OAuth & Permissions** > **Bot User OAuth Token** |
-| App Token (`xapp-...`) | [api.slack.com/apps](https://api.slack.com/apps) > Your App > **Basic Information** > scroll to **App-Level Tokens** |
+- Confidence badge: 🟢 High (80%+) | 🟡 Medium (50-79%) | 🔴 Low (<50%)
+- Clickable link to the original post
+- Proper Slack @mention (not plain text) -- uses `<@USER_ID>` or `<!subteam^GROUP_ID>` format
 
 ---
 
-## Forking for Your Squad
+## For Other Squads
 
-1. Clone the repo
-2. Run `wails dev` or `wails build`
-3. Launch the app -- the wizard walks through all configuration
-4. Select the categories your squad owns
-5. Start monitoring
+HAI-Wire is designed to be forked. Each squad runs their own instance with their own config.
 
-**No code changes required.** Everything is configured through the UI. Each squad runs their own instance.
+```bash
+# 1. Clone
+git clone https://github.com/ddvorkin14/hai-wire.git
+cd hai-wire
+
+# 2. Run
+wails dev
+
+# 3. Configure through the UI
+#    - Connect Slack (automatic via Claude Code)
+#    - Set your squad name, ping target, channels
+#    - Upload your runbook OR pick from default categories
+#    - Set confidence threshold
+#    - Start monitoring
+```
+
+**No code changes required.** Everything is configured through the UI.
+
+### What each squad customizes
+
+| Setting | Example (hai-conversion) | Example (trust-safety) |
+|---------|------------------------|----------------------|
+| Squad Name | hai-conversion | trust-safety |
+| Watch Channel | C08MXC8URS8 | C08MXC8URS8 |
+| Triage Channel | CXXXXXXXXXX | CYYYYYYYYYY |
+| Ping Target | @hai-conversion-on-call | @tns-hai-only |
+| Categories | Onboarding Blockers | Trust & Safety, Fraud |
+| Threshold | 77% | 60% |
 
 ---
 
 ## Architecture
 
 ```
-Go Backend                          React Frontend
-+------------------+               +------------------+
-| Slack Client     |               | Setup Wizard     |
-| (Socket Mode)    |               | (7 steps)        |
-+------------------+               +------------------+
-| Claude Classifier|               | Live Feed        |
-| (Anthropic API)  |               | (real-time)      |
-+------------------+               +------------------+
-| Triage           |  <-- Wails -> | Settings         |
-| Orchestrator     |    Bindings   | (editable)       |
-+------------------+               +------------------+
-| Config Service   |               | Activity Log     |
-+------------------+               | (history + stats)|
-| SQLite DB        |               +------------------+
-+------------------+
+┌─────────────────────────────────────────────────────┐
+│                    Wails v2 App                      │
+│                                                      │
+│  ┌──────────────────┐    ┌────────────────────────┐  │
+│  │   Go Backend     │    │   React Frontend       │  │
+│  │                  │    │                        │  │
+│  │  ┌────────────┐  │    │  ┌──────────────────┐  │  │
+│  │  │ Slack      │  │    │  │ Live Feed        │  │  │
+│  │  │ Client     │◄─┼────┼──│ (auto-refresh)   │  │  │
+│  │  │ (keychain) │  │    │  └──────────────────┘  │  │
+│  │  └────────────┘  │    │  ┌──────────────────┐  │  │
+│  │  ┌────────────┐  │    │  │ Review Queue     │  │  │
+│  │  │ Claude     │  │    │  │ (approve/skip)   │  │  │
+│  │  │ Classifier │◄─┼────┼──└──────────────────┘  │  │
+│  │  └────────────┘  │    │  ┌──────────────────┐  │  │
+│  │  ┌────────────┐  │    │  │ Settings         │  │  │
+│  │  │ SQLite DB  │  │    │  │ (all config)     │  │  │
+│  │  │ (local)    │◄─┼────┼──└──────────────────┘  │  │
+│  │  └────────────┘  │    │  ┌──────────────────┐  │  │
+│  │  ┌────────────┐  │    │  │ Setup Dashboard  │  │  │
+│  │  │ Config     │  │    │  │ (non-linear)     │  │  │
+│  │  │ Service    │◄─┼────┼──└──────────────────┘  │  │
+│  │  └────────────┘  │    │                        │  │
+│  └──────────────────┘    └────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
 ```
 
 ### Tech Stack
 
-| Component | Technology |
-|-----------|-----------|
-| Desktop framework | Wails v2 |
-| Backend | Go |
-| Frontend | React + TypeScript |
-| Styling | Tailwind CSS |
-| Slack integration | slack-go (Socket Mode) |
-| LLM classification | Claude API (Anthropic Go SDK) |
-| Local storage | SQLite |
-
----
-
-## Support Categories
-
-HAI-Wire classifies messages into 27 categories derived from real `#hai-support` traffic:
-
-| Category | Description |
-|----------|-------------|
-| Trust & Safety | Suspicious accounts, follow-on review, KYC issues |
-| Pay Disputes | Pay amount disputes, hour mismatches |
-| Verification Swaps | EDU vs non-EDU account swaps |
-| Slack Access | Missing Slack invites, channel access |
-| Duplicate Accounts | Account merges, deprecated accounts |
-| Verified But Blocked | "Under review" despite verification |
-| Pay Rate Corrections | Wrong rate applied |
-| Project Re-allocation | Moving fellows between accounts/projects |
-| Google Access | Google Docs/Groups invite issues |
-| Project Not Visible | Dashboard visibility issues |
-| Onboarding Blockers | Stuck on setup, loading screens |
-| Incentive Disputes | Missing bonuses |
-| Geographic Restrictions | Geofencing, non-US access |
-| Platform Bugs | UI issues, broken features |
-| Ban Appeals | Ban/unban conflicts |
-| Account Deletion | Deletion process issues |
-| Fraud / Scam | Hacked accounts, phishing |
-| Feather Access | Feather platform access |
-| Tax Forms | 1099, 1042-S, W9 issues |
-| Assessment Issues | Assessment errors, retakes |
-| Playbook Access | Can't access project playbook |
-| Tasking Issues | No tasks, wrong tasks |
-| Onboarding Emails | Broken invitation links |
-| Project Lead Delays | Approval wait times |
-| Work Letters | Employment verification |
-| Hour Adjustments | Accidental time entries |
-| Git Access | GitHub/Git issues (Helix) |
+| Layer | Technology | Why |
+|-------|-----------|-----|
+| Desktop | [Wails v2](https://wails.io) | Native app, single binary, no Electron bloat |
+| Backend | Go | Fast, simple, great Slack/HTTP libraries |
+| Frontend | React + TypeScript | Component model, type safety |
+| Styling | Tailwind CSS | Rapid UI iteration |
+| AI | Claude API (Anthropic Go SDK) | Best classification accuracy |
+| Slack | Raw HTTP + slack-go | Enterprise Grid compatible |
+| Storage | SQLite | Zero-config local persistence |
+| Auth | macOS Keychain | Reads Claude Code's Slack MCP token |
 
 ---
 
 ## Development
 
 ```bash
-# Run in dev mode (hot reload)
+# Dev mode with hot reload
 wails dev
 
-# Run Go tests
+# Run all tests
 go test ./internal/... -v
 
 # Build production binary
 wails build
 
-# Frontend only (for UI development)
+# Frontend only (for UI work)
 cd frontend && npm run dev
+
+# Generate Wails bindings after changing Go methods
+wails generate module
 ```
 
 ### Project Structure
 
 ```
 hai-wire/
-  app.go                    # Wails app bindings
-  main.go                   # Entry point
-  internal/
-    db/                     # SQLite persistence
-    config/                 # Config service
-    classifier/             # Claude API + categories
-    slack/                  # Slack Socket Mode client
-    triage/                 # Orchestrator (classify + route)
-  frontend/
-    src/
-      components/
-        wizard/             # 7-step setup wizard
-        feed/               # Live feed view
-        settings/           # Settings panel
-        log/                # Activity log
-        shared/             # Shared components
+├── app.go                          # Wails bindings (Go <-> React bridge)
+├── main.go                         # Entry point
+├── internal/
+│   ├── db/                         # SQLite: schema, migrations, CRUD
+│   │   ├── db.go
+│   │   └── db_test.go
+│   ├── config/                     # Config service (get/set from SQLite)
+│   │   ├── config.go
+│   │   └── config_test.go
+│   ├── classifier/                 # Claude AI classification
+│   │   ├── classifier.go           # API calls, prompt building
+│   │   ├── classifier_test.go
+│   │   ├── categories.go           # 27 default categories
+│   │   └── extract.go              # Extract categories from documents
+│   ├── slack/                      # Slack integration
+│   │   ├── client.go               # API client, user search, mentions
+│   │   ├── client_test.go
+│   │   └── keychain.go             # Read token from macOS keychain
+│   └── triage/                     # Routing helpers
+│       ├── triage.go
+│       └── triage_test.go
+├── frontend/
+│   └── src/
+│       ├── App.tsx                  # Main app shell + nav
+│       ├── types.ts                 # Shared TypeScript types
+│       └── components/
+│           ├── feed/                # Live Feed + MessageCard
+│           ├── queue/               # Review Queue
+│           ├── settings/            # Settings + PingTargetPicker
+│           ├── wizard/              # Setup Dashboard (7 steps)
+│           ├── log/                 # Activity Log
+│           └── shared/              # ConfidenceBadge, etc.
+└── docs/
+    └── superpowers/
+        ├── specs/                   # Design spec
+        └── plans/                   # Implementation plan
+```
+
+### Data Model
+
+```sql
+-- Config (key-value store)
+config (key TEXT PK, value TEXT)
+
+-- Categories your squad owns
+owned_categories (category_key TEXT UNIQUE, category_name TEXT)
+
+-- Custom categories from document upload
+custom_categories (key TEXT UNIQUE, name TEXT, description TEXT)
+
+-- Every classified message
+processed_messages (
+  message_ts TEXT UNIQUE,  -- Slack timestamp (dedup key)
+  category TEXT,           -- Classified category
+  confidence REAL,         -- 0.0 - 1.0
+  summary TEXT,            -- AI-generated summary
+  reasoning TEXT,          -- Why this category/confidence
+  status TEXT,             -- classified | pending | approved | rejected
+  routed BOOLEAN           -- Whether it was posted to triage
+)
+
+-- Auto-approval rules
+auto_approval_rules (
+  category_key TEXT,       -- NULL = all categories
+  min_confidence REAL,     -- Minimum confidence to auto-approve
+  enabled BOOLEAN
+)
 ```
 
 ---
 
-## Future Ideas
+## Roadmap
 
-- Cloud deployment via Claude Agent SDK (always-on, no local machine)
-- Multi-squad mode (single instance routing to multiple squads)
-- Accuracy feedback loop (thumbs up/down on classifications)
-- Notion integration for auto-creating runbook entries
-- Analytics dashboard with classification trends
+- [ ] Cloud deployment via Claude Agent SDK (always-on, no local machine)
+- [ ] Multi-squad mode (single instance routing to multiple squads)
+- [ ] Accuracy feedback loop (thumbs up/down on classifications)
+- [ ] Notion integration for auto-creating runbook entries
+- [ ] Analytics dashboard with classification trends
+- [ ] Custom ack reply message templates
+- [ ] Slack thread context (read replies before classifying)
+- [ ] Batch re-classify with updated categories
 
 ---
 
-## License
+## Contributing
 
-Internal tool -- HandshakeAI
+This is an internal HandshakeAI tool. To contribute:
+
+1. Fork the repo
+2. Create a feature branch
+3. Make your changes with tests
+4. Open a PR
+
+---
+
+<div align="center">
+
+Built with Claude AI by the HandshakeAI team
+
+[Report Bug](https://github.com/ddvorkin14/hai-wire/issues) | [Request Feature](https://github.com/ddvorkin14/hai-wire/issues)
+
+</div>
