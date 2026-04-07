@@ -97,7 +97,7 @@ export function ReviewQueue() {
         <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 mb-4">
           <h3 className="text-sm font-medium text-slate-300 mb-3">Auto-Approval Rules</h3>
           <p className="text-xs text-slate-500 mb-3">
-            Messages matching these rules will be routed automatically without review.
+            Messages matching these rules will be auto-queued for review.
           </p>
 
           {/* Existing rules */}

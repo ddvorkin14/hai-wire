@@ -506,17 +506,11 @@ func (a *App) processMessage(ctx context.Context, cls *classifier.Classifier, ts
 	_, owned := ownedCats[result.Category]
 	matchesSquad := owned && result.Confidence >= threshold
 
-	// Determine status: auto-approve if rules match, otherwise queue for review
+	// Determine status: auto-queue if rules match or category is owned, otherwise classified
 	status := "classified"
 	routed := false
 	if matchesSquad {
-		autoApproved, _ := a.db.CheckAutoApproval(result.Category, result.Confidence)
-		if autoApproved {
-			status = "approved"
-			routed = true
-		} else {
-			status = "pending"
-		}
+		status = "pending"
 	}
 
 	dbMsg := db.ProcessedMessage{
@@ -531,27 +525,6 @@ func (a *App) processMessage(ctx context.Context, cls *classifier.Classifier, ts
 		Status:     status,
 	}
 	a.db.SaveProcessedMessage(dbMsg)
-
-	// If auto-approved, route immediately
-	if routed {
-		catName := ownedCats[result.Category]
-		pct := int(result.Confidence * 100)
-		emoji := "🟡"
-		if pct >= 80 {
-			emoji = "🟢"
-		} else if pct < 50 {
-			emoji = "🔴"
-		}
-		permalink := a.slack.GetPermalink(watchChannel, ts)
-		formattedPing := slackclient.FormatMention(pingGroup)
-		triageMsg := fmt.Sprintf("%s *[Confidence: %d%%] %s*\n\n*Summary:* %s\n\n*Original post:* %s\n*Posted by:* %s\n\n%s",
-			emoji, pct, catName, result.Summary, permalink, authorName, formattedPing)
-		a.slack.PostToChannel(triageChannel, triageMsg)
-		ackEnabled, _ := a.config.GetAckReplyEnabled()
-		if ackEnabled == "true" {
-			a.slack.ReplyInThread(watchChannel, ts, "This support request has been analyzed and the appropriate team has been notified.")
-		}
-	}
 
 	runtime.EventsEmit(a.ctx, "triage:event", map[string]interface{}{
 		"message_ts": ts,
