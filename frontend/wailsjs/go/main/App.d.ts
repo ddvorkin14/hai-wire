@@ -3,6 +3,7 @@
 import {classifier} from '../models';
 import {db} from '../models';
 import {slack} from '../models';
+import {main} from '../models';
 
 export function AnalyzeDocument(arg1:string):Promise<Array<classifier.ExtractedCategory>>;
 
@@ -34,7 +35,7 @@ export function IsSlackConnected():Promise<boolean>;
 
 export function ListSlackChannels():Promise<Array<slack.ChannelInfo>>;
 
-export function LoadAllMentionTargets():Promise<Array<slack.MentionTarget>>;
+export function PreloadMentionTargets():Promise<void>;
 
 export function QueueMessage(arg1:string):Promise<void>;
 
@@ -43,6 +44,8 @@ export function ReconnectSlack():Promise<string>;
 export function RejectMessage(arg1:string):Promise<void>;
 
 export function ResetToDefaultCategories():Promise<void>;
+
+export function SaveAckReplyEnabled(arg1:string):Promise<void>;
 
 export function SaveAnthropicKey(arg1:string):Promise<void>;
 
@@ -57,6 +60,8 @@ export function SaveOwnedCategories(arg1:Record<string, string>):Promise<void>;
 export function SaveSquadConfig(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SaveWatchChannel(arg1:string):Promise<void>;
+
+export function SearchMentionTargets(arg1:string,arg2:number):Promise<main.SearchResult>;
 
 export function StartMonitoring():Promise<void>;
 

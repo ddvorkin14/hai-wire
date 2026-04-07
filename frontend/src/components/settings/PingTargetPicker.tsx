@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
-import { LoadAllMentionTargets } from '../../../wailsjs/go/main/App';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { SearchMentionTargets } from '../../../wailsjs/go/main/App';
 
 interface MentionTarget {
   id: string;
   name: string;
   type: string;
+  title: string;
 }
 
 interface Props {
@@ -13,13 +14,16 @@ interface Props {
 }
 
 export function PingTargetPicker({ value, onChange }: Props) {
-  const [allTargets, setAllTargets] = useState<MentionTarget[]>([]);
   const [search, setSearch] = useState('');
+  const [results, setResults] = useState<MentionTarget[]>([]);
+  const [total, setTotal] = useState(0);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [selectedName, setSelectedName] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Close on outside click
   useEffect(() => {
@@ -32,59 +36,64 @@ export function PingTargetPicker({ value, onChange }: Props) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Load all targets once when dropdown first opens
-  const loadTargets = async () => {
-    if (loaded) return;
+  const doSearch = useCallback(async (query: string, newOffset: number, append: boolean) => {
     setLoading(true);
     try {
-      const targets = await LoadAllMentionTargets();
-      setAllTargets(targets || []);
-    } catch (e) {
-      console.error('load targets:', e);
-    }
+      const result = await SearchMentionTargets(query, newOffset);
+      if (result) {
+        setResults((prev) => append ? [...prev, ...result.items] : (result.items || []));
+        setTotal(result.total);
+        setOffset(newOffset + (result.items?.length || 0));
+      }
+    } catch {}
     setLoading(false);
-    setLoaded(true);
+  }, []);
+
+  const handleSearch = (query: string) => {
+    setSearch(query);
+    setOpen(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setResults([]);
+      setOffset(0);
+      doSearch(query, 0, false);
+    }, 200);
   };
-
-  // Client-side filter -- instant, no API calls
-  const filtered = useMemo(() => {
-    if (!search) return allTargets;
-    const q = search.toLowerCase();
-    return allTargets.filter(t =>
-      t.name.toLowerCase().includes(q) ||
-      t.id.toLowerCase().includes(q)
-    );
-  }, [allTargets, search]);
-
-  const selectedTarget = useMemo(() => {
-    return allTargets.find(t => t.id === value);
-  }, [allTargets, value]);
 
   const handleFocus = () => {
     setOpen(true);
-    loadTargets();
+    if (results.length === 0) {
+      doSearch(search, 0, false);
+    }
+  };
+
+  const handleScroll = () => {
+    const el = listRef.current;
+    if (!el || loading) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 20) {
+      if (offset < total) {
+        doSearch(search, offset, true);
+      }
+    }
   };
 
   const handleSelect = (target: MentionTarget) => {
-    onChange(target.id);
+    setSelectedName(target.name);
     setSearch('');
     setOpen(false);
+    onChange(target.id);
   };
 
   const handleClear = () => {
+    setSelectedName('');
     onChange('');
-    setSearch('');
-    setTimeout(() => inputRef.current?.focus(), 0);
   };
 
-  // Show selected state
-  if (value && (selectedTarget || !loaded)) {
-    const displayName = selectedTarget
-      ? `${selectedTarget.name} (${selectedTarget.type})`
-      : value;
+  // Show selected
+  if (value) {
     return (
       <div className="flex items-center gap-2 bg-amber-400/10 border border-amber-400/30 rounded px-3 py-2">
-        <span className="text-sm text-amber-400 flex-1">{displayName}</span>
+        <span className="text-sm text-amber-400 flex-1">{selectedName || value}</span>
         <button onClick={handleClear} className="text-slate-500 hover:text-red-400 text-xs">Change</button>
       </div>
     );
@@ -93,36 +102,39 @@ export function PingTargetPicker({ value, onChange }: Props) {
   return (
     <div ref={wrapperRef} className="relative">
       <input
-        ref={inputRef}
         value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        onChange={(e) => handleSearch(e.target.value)}
         onFocus={handleFocus}
-        placeholder={loading ? 'Loading users and groups...' : 'Search users and groups...'}
+        placeholder="Search users and groups..."
         className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400"
       />
 
       {open && (
-        <div className="absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded shadow-lg max-h-52 overflow-y-auto">
-          {loading ? (
-            <div className="px-3 py-4 text-xs text-slate-500 text-center">Loading...</div>
-          ) : filtered.length === 0 ? (
+        <div ref={listRef} onScroll={handleScroll}
+          className="absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded shadow-lg max-h-60 overflow-y-auto">
+          {results.length === 0 && !loading && (
             <div className="px-3 py-4 text-xs text-slate-500 text-center">
-              {search ? 'No results' : 'No users or groups found'}
+              {search ? 'No results' : 'Type to search...'}
             </div>
-          ) : (
-            filtered.slice(0, 30).map((t) => (
-              <button key={`${t.type}-${t.id}`} onClick={() => handleSelect(t)}
-                className="w-full text-left px-3 py-2 text-sm hover:bg-slate-600 flex items-center justify-between gap-2">
-                <span className="text-slate-200 truncate">{t.name}</span>
-                <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${
-                  t.type === 'group' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'
-                }`}>{t.type}</span>
-              </button>
-            ))
           )}
-          {filtered.length > 30 && (
-            <div className="px-3 py-1.5 text-xs text-slate-500 text-center border-t border-slate-600">
-              {filtered.length - 30} more -- type to narrow results
+          {results.map((t) => (
+            <button key={`${t.type}-${t.id}`} onClick={() => handleSelect(t)}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-slate-600 flex items-center gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="text-slate-200 truncate">{t.name}</div>
+                {t.title && <div className="text-xs text-slate-500 truncate">{t.title}</div>}
+              </div>
+              <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${
+                t.type === 'group' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'
+              }`}>{t.type}</span>
+            </button>
+          ))}
+          {loading && (
+            <div className="px-3 py-2 text-xs text-slate-500 text-center">Loading...</div>
+          )}
+          {!loading && results.length > 0 && offset < total && (
+            <div className="px-3 py-1.5 text-xs text-slate-600 text-center border-t border-slate-600">
+              Showing {results.length} of {total} — scroll for more
             </div>
           )}
         </div>

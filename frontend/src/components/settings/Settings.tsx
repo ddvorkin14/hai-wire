@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import {
   GetAllConfig, GetOwnedCategories, GetAllCategories,
   SaveSquadConfig, SaveOwnedCategories, SaveConfidenceThreshold, SaveWatchChannel,
-  SaveAnthropicKey, IsSlackConnected, GetSlackStatus, ReconnectSlack,
+  SaveAnthropicKey, SaveAckReplyEnabled,
+  IsSlackConnected, GetSlackStatus, ReconnectSlack,
   TestWatchChannel, TestTriageChannel,
 } from '../../../wailsjs/go/main/App';
 import { PingTargetPicker } from './PingTargetPicker';
@@ -62,6 +63,7 @@ export function Settings() {
     await SaveWatchChannel(config.watch_channel_id || '');
     await SaveConfidenceThreshold(config.confidence_threshold || '0.5');
     await SaveAnthropicKey(config.anthropic_key || '');
+    await SaveAckReplyEnabled(config.ack_reply_enabled || 'false');
     await SaveOwnedCategories(ownedCats);
     setSaved(true);
     setDirty(false);
@@ -226,6 +228,23 @@ export function Settings() {
               )}
             </div>
           </div>
+        </section>
+
+        {/* Behavior */}
+        <section className="bg-slate-800 rounded-lg border border-slate-700 p-4">
+          <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wide mb-3">Behavior</h3>
+          <label className="flex items-center justify-between cursor-pointer">
+            <div>
+              <div className="text-sm text-slate-300">Reply to routed posts</div>
+              <div className="text-xs text-slate-500">Post an acknowledgment reply in the original thread when a request is routed.</div>
+            </div>
+            <input
+              type="checkbox"
+              checked={config.ack_reply_enabled === 'true'}
+              onChange={(e) => update('ack_reply_enabled', e.target.checked ? 'true' : 'false')}
+              className="accent-amber-400 w-4 h-4"
+            />
+          </label>
         </section>
 
         {/* Confidence */}

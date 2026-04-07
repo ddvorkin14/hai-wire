@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
+	"sync"
 
 	"github.com/slack-go/slack"
 )
@@ -160,9 +162,10 @@ func (c *Client) GetUserName(userID string) string {
 }
 
 type MentionTarget struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Type string `json:"type"` // "group" or "user"
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Type  string `json:"type"`  // "group" or "user"
+	Title string `json:"title"` // job title / team
 }
 
 // ExtractMentionTargets scans recent messages in a channel for <!subteam^ID> and <@USER_ID>
@@ -283,42 +286,88 @@ func (c *Client) tryResolveGroupName(groupID string) string {
 	return ""
 }
 
-// LoadAllMentionTargets loads all users from the workspace and groups from channel messages.
-// This is meant to be called once and cached on the frontend.
-func (c *Client) LoadAllMentionTargets(channelID string) ([]MentionTarget, error) {
-	var targets []MentionTarget
+// cachedTargets holds all users+groups in memory after first load.
+var cachedTargets []MentionTarget
+var cacheLoaded bool
+var cacheMu sync.Mutex
 
-	// 1. Load groups from channel messages
+// EnsureCacheLoaded loads all users and groups into memory (once).
+func (c *Client) EnsureCacheLoaded(channelID string) {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+	if cacheLoaded {
+		return
+	}
+
+	// 1. Groups from channel messages
 	if channelID != "" {
 		groups, err := c.ExtractMentionTargets(channelID)
 		if err == nil {
-			// Only keep groups from extraction, we'll get users from API
 			for _, g := range groups {
 				if g.Type == "group" {
-					targets = append(targets, g)
+					cachedTargets = append(cachedTargets, g)
 				}
 			}
 		}
 	}
 
-	// 2. Load workspace users via raw HTTP (slack-go's GetUsers has issues with Enterprise Grid)
-	users, err := c.fetchUsersRaw()
+	// 2. All workspace users
+	users, err := c.fetchUsersHTTP()
 	if err != nil {
-		log.Printf("LoadAllMentionTargets: users fetch error: %v", err)
-		return targets, nil
+		log.Printf("EnsureCacheLoaded: users error: %v", err)
+	} else {
+		for _, u := range users {
+			cachedTargets = append(cachedTargets, MentionTarget{ID: u.ID, Name: u.Name, Type: "user", Title: u.Title})
+		}
 	}
 
-	for _, u := range users {
-		targets = append(targets, MentionTarget{ID: u.ID, Name: u.Name, Type: "user"})
+	cacheLoaded = true
+	log.Printf("EnsureCacheLoaded: %d targets cached", len(cachedTargets))
+}
+
+// SearchTargets returns filtered, paginated results from the cache.
+func (c *Client) SearchTargets(query string, offset, limit int) ([]MentionTarget, int, error) {
+	cacheMu.Lock()
+	all := cachedTargets
+	cacheMu.Unlock()
+
+	if !cacheLoaded {
+		return nil, 0, fmt.Errorf("cache not loaded yet")
 	}
 
-	log.Printf("LoadAllMentionTargets: loaded %d targets (%d users, %d groups)", len(targets), len(users), len(targets)-len(users))
-	return targets, nil
+	// Filter
+	var filtered []MentionTarget
+	if query == "" {
+		filtered = all
+	} else {
+		q := strings.ToLower(query)
+		for _, t := range all {
+			if strings.Contains(strings.ToLower(t.Name), q) ||
+				strings.Contains(strings.ToLower(t.Title), q) ||
+				strings.Contains(strings.ToLower(t.ID), q) {
+				filtered = append(filtered, t)
+			}
+		}
+	}
+
+	total := len(filtered)
+
+	// Paginate
+	if offset >= len(filtered) {
+		return nil, total, nil
+	}
+	end := offset + limit
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+
+	return filtered[offset:end], total, nil
 }
 
 type rawUser struct {
-	ID   string
-	Name string
+	ID    string
+	Name  string
+	Title string
 }
 
 func (c *Client) fetchUsersRaw() ([]rawUser, error) {
@@ -357,6 +406,7 @@ func (c *Client) fetchUsersHTTP() ([]rawUser, error) {
 				Profile  struct {
 					DisplayName string `json:"display_name"`
 					RealName    string `json:"real_name"`
+					Title       string `json:"title"`
 				} `json:"profile"`
 			} `json:"members"`
 			ResponseMetadata struct {
@@ -389,7 +439,7 @@ func (c *Client) fetchUsersHTTP() ([]rawUser, error) {
 				name = m.Name
 			}
 			if name != "" {
-				allUsers = append(allUsers, rawUser{ID: m.ID, Name: name})
+				allUsers = append(allUsers, rawUser{ID: m.ID, Name: name, Title: m.Profile.Title})
 			}
 		}
 

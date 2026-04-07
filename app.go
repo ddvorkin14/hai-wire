@@ -71,6 +71,9 @@ func (a *App) tryConnectSlack() {
 	a.slack = client
 	a.config.SetSlackConnected("true")
 	log.Printf("Slack connected to %s", teamName)
+
+	// Preload user cache in background
+	a.PreloadMentionTargets()
 }
 
 // --- Slack ---
@@ -157,17 +160,41 @@ func (a *App) GetOwnedCategories() (map[string]string, error) {
 	return a.db.GetOwnedCategories()
 }
 
+func (a *App) SaveAckReplyEnabled(val string) error {
+	return a.config.SetAckReplyEnabled(val)
+}
+
 func (a *App) SaveConfidenceThreshold(threshold string) error {
 	return a.config.SetConfidenceThreshold(threshold)
 }
 
-// LoadAllMentionTargets loads all users and groups. Called once, cached on frontend.
-func (a *App) LoadAllMentionTargets() ([]slackclient.MentionTarget, error) {
+// PreloadMentionTargets kicks off background loading of users+groups cache.
+func (a *App) PreloadMentionTargets() {
+	if a.slack == nil {
+		return
+	}
+	watchChannel, _ := a.config.GetWatchChannelID()
+	go a.slack.EnsureCacheLoaded(watchChannel)
+}
+
+type SearchResult struct {
+	Items []slackclient.MentionTarget `json:"items"`
+	Total int                         `json:"total"`
+}
+
+// SearchMentionTargets returns paginated, filtered results.
+func (a *App) SearchMentionTargets(query string, offset int) (*SearchResult, error) {
 	if a.slack == nil {
 		return nil, fmt.Errorf("Slack not connected")
 	}
 	watchChannel, _ := a.config.GetWatchChannelID()
-	return a.slack.LoadAllMentionTargets(watchChannel)
+	a.slack.EnsureCacheLoaded(watchChannel)
+
+	items, total, err := a.slack.SearchTargets(query, offset, 25)
+	if err != nil {
+		return nil, err
+	}
+	return &SearchResult{Items: items, Total: total}, nil
 }
 
 // TestWatchChannel verifies we can read from the watch channel (no message sent).
@@ -341,7 +368,10 @@ func (a *App) ApproveMessage(messageTS string) error {
 	if err := a.slack.PostToChannel(triageChannel, triageMsg); err != nil {
 		return fmt.Errorf("post to triage: %v", err)
 	}
-	a.slack.ReplyInThread(watchChannel, msg.MessageTS, "This support request has been analyzed and the appropriate team has been notified.")
+	ackEnabled, _ := a.config.GetAckReplyEnabled()
+	if ackEnabled == "true" {
+		a.slack.ReplyInThread(watchChannel, msg.MessageTS, "This support request has been analyzed and the appropriate team has been notified.")
+	}
 
 	return a.db.SetMessageRouted(messageTS)
 }
@@ -517,7 +547,10 @@ func (a *App) processMessage(ctx context.Context, cls *classifier.Classifier, ts
 		triageMsg := fmt.Sprintf("%s *[Confidence: %d%%] %s*\n\n*Summary:* %s\n\n*Original post:* %s\n*Posted by:* %s\n\n%s",
 			emoji, pct, catName, result.Summary, permalink, authorName, formattedPing)
 		a.slack.PostToChannel(triageChannel, triageMsg)
-		a.slack.ReplyInThread(watchChannel, ts, "This support request has been analyzed and the appropriate team has been notified.")
+		ackEnabled, _ := a.config.GetAckReplyEnabled()
+		if ackEnabled == "true" {
+			a.slack.ReplyInThread(watchChannel, ts, "This support request has been analyzed and the appropriate team has been notified.")
+		}
 	}
 
 	runtime.EventsEmit(a.ctx, "triage:event", map[string]interface{}{

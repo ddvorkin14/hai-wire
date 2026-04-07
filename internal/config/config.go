@@ -25,6 +25,15 @@ func (s *Service) GetSquadName() (string, error)       { return s.db.GetConfig("
 func (s *Service) SetPingGroup(group string) error     { return s.db.SetConfig("ping_group", group) }
 func (s *Service) GetPingGroup() (string, error)       { return s.db.GetConfig("ping_group") }
 
+func (s *Service) SetAckReplyEnabled(val string) error { return s.db.SetConfig("ack_reply_enabled", val) }
+func (s *Service) GetAckReplyEnabled() (string, error) {
+	val, err := s.db.GetConfig("ack_reply_enabled")
+	if err != nil || val == "" {
+		return "false", nil // Off by default
+	}
+	return val, nil
+}
+
 func (s *Service) SetConfidenceThreshold(threshold string) error {
 	return s.db.SetConfig("confidence_threshold", threshold)
 }
@@ -52,7 +61,7 @@ func (s *Service) IsSetupComplete() bool {
 }
 
 func (s *Service) GetAllConfig() (map[string]string, error) {
-	keys := []string{"slack_connected", "anthropic_key", "watch_channel_id", "triage_channel_id", "squad_name", "ping_group", "confidence_threshold"}
+	keys := []string{"slack_connected", "anthropic_key", "watch_channel_id", "triage_channel_id", "squad_name", "ping_group", "confidence_threshold", "ack_reply_enabled"}
 	result := make(map[string]string)
 	for _, key := range keys {
 		val, err := s.db.GetConfig(key)

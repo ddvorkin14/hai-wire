@@ -109,6 +109,43 @@ export namespace db {
 
 }
 
+export namespace main {
+	
+	export class SearchResult {
+	    items: slack.MentionTarget[];
+	    total: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SearchResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], slack.MentionTarget);
+	        this.total = source["total"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace slack {
 	
 	export class ChannelInfo {
@@ -129,6 +166,7 @@ export namespace slack {
 	    id: string;
 	    name: string;
 	    type: string;
+	    title: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new MentionTarget(source);
@@ -139,6 +177,7 @@ export namespace slack {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.type = source["type"];
+	        this.title = source["title"];
 	    }
 	}
 

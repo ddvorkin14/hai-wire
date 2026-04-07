@@ -62,8 +62,8 @@ export function ListSlackChannels() {
   return window['go']['main']['App']['ListSlackChannels']();
 }
 
-export function LoadAllMentionTargets() {
-  return window['go']['main']['App']['LoadAllMentionTargets']();
+export function PreloadMentionTargets() {
+  return window['go']['main']['App']['PreloadMentionTargets']();
 }
 
 export function QueueMessage(arg1) {
@@ -80,6 +80,10 @@ export function RejectMessage(arg1) {
 
 export function ResetToDefaultCategories() {
   return window['go']['main']['App']['ResetToDefaultCategories']();
+}
+
+export function SaveAckReplyEnabled(arg1) {
+  return window['go']['main']['App']['SaveAckReplyEnabled'](arg1);
 }
 
 export function SaveAnthropicKey(arg1) {
@@ -108,6 +112,10 @@ export function SaveSquadConfig(arg1, arg2, arg3) {
 
 export function SaveWatchChannel(arg1) {
   return window['go']['main']['App']['SaveWatchChannel'](arg1);
+}
+
+export function SearchMentionTargets(arg1, arg2) {
+  return window['go']['main']['App']['SearchMentionTargets'](arg1, arg2);
 }
 
 export function StartMonitoring() {
