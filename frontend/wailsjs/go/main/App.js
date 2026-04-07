@@ -69,3 +69,7 @@ export function StartMonitoring() {
 export function StopMonitoring() {
   return window['go']['main']['App']['StopMonitoring']();
 }
+
+export function TestChannel(arg1) {
+  return window['go']['main']['App']['TestChannel'](arg1);
+}

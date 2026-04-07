@@ -161,6 +161,18 @@ func (a *App) SaveConfidenceThreshold(threshold string) error {
 	return a.config.SetConfidenceThreshold(threshold)
 }
 
+// TestChannel sends a test message to a channel to verify it works.
+func (a *App) TestChannel(channelID string) (string, error) {
+	if a.slack == nil {
+		return "", fmt.Errorf("Slack not connected")
+	}
+	err := a.slack.PostToChannel(channelID, "HAI-Wire test message -- if you see this, the channel is configured correctly.")
+	if err != nil {
+		return "", fmt.Errorf("Failed to post: %v", err)
+	}
+	return "Message sent successfully", nil
+}
+
 // --- Categories ---
 
 func (a *App) GetAllCategories() []classifier.Category {

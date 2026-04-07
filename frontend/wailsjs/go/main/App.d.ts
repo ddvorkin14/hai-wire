@@ -37,3 +37,5 @@ export function SaveWatchChannel(arg1:string):Promise<void>;
 export function StartMonitoring():Promise<void>;
 
 export function StopMonitoring():Promise<void>;
+
+export function TestChannel(arg1:string):Promise<string>;
