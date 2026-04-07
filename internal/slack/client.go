@@ -104,10 +104,14 @@ func (c *Client) ListChannels() ([]ChannelInfo, error) {
 }
 
 func (c *Client) FetchNewMessages(channelID, oldest string) ([]slack.Message, error) {
+	limit := 50
+	if oldest == "" {
+		limit = 100 // Fetch more on initial load for better mention extraction
+	}
 	params := &slack.GetConversationHistoryParameters{
 		ChannelID: channelID,
 		Oldest:    oldest,
-		Limit:     50,
+		Limit:     limit,
 	}
 	history, err := c.api.GetConversationHistory(params)
 	if err != nil {
@@ -221,11 +225,16 @@ func (c *Client) ExtractMentionTargets(channelID string) ([]MentionTarget, error
 		if len(name) > 0 && name[0] == '@' {
 			name = name[1:]
 		}
-		// Replace hyphens with spaces and title case for display
-		if name == id {
-			name = "Group " + id // Couldn't resolve name
+		if name == id || name == "" {
+			// Try to resolve via usergroups API (may fail due to scope)
+			resolved := c.tryResolveGroupName(id)
+			if resolved != "" {
+				name = resolved
+			} else {
+				name = "@" + id // Show as @ID so it's clear it's a mention
+			}
 		}
-		targets = append(targets, MentionTarget{ID: id, Name: name, Type: "group"})
+		targets = append(targets, MentionTarget{ID: id, Name: "@" + name, Type: "group"})
 	}
 
 	// Resolve user names via API (full names, not just first names)
@@ -245,6 +254,21 @@ func (c *Client) ExtractMentionTargets(channelID string) ([]MentionTarget, error
 	}
 
 	return targets, nil
+}
+
+// tryResolveGroupName attempts to get a user group's handle via the API.
+func (c *Client) tryResolveGroupName(groupID string) string {
+	// Try usergroups.list -- will likely fail due to missing scope on Enterprise Grid
+	groups, err := c.api.GetUserGroups()
+	if err != nil {
+		return ""
+	}
+	for _, g := range groups {
+		if g.ID == groupID {
+			return g.Handle
+		}
+	}
+	return ""
 }
 
 // SearchMentionTargets filters the extracted mention targets by query string.
