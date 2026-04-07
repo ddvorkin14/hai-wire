@@ -228,11 +228,35 @@ func (a *App) pollLoop(ctx context.Context) {
 		threshold = 0.5
 	}
 
-	lastTS := fmt.Sprintf("%d.000000", time.Now().Unix())
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
 	log.Printf("Monitoring started: channel=%s, threshold=%.0f%%", watchChannel, threshold*100)
+
+	// On start, classify the last 15 messages from the channel
+	lastTS := ""
+	initialMsgs, err := a.slack.FetchNewMessages(watchChannel, "")
+	if err != nil {
+		log.Printf("initial fetch error: %v", err)
+	} else {
+		// FetchNewMessages returns newest first, take last 15
+		limit := 15
+		if len(initialMsgs) < limit {
+			limit = len(initialMsgs)
+		}
+		for _, msg := range initialMsgs[:limit] {
+			if msg.BotID != "" || msg.ThreadTimestamp != "" || msg.SubType != "" || msg.Text == "" {
+				continue
+			}
+			if msg.Timestamp > lastTS {
+				lastTS = msg.Timestamp
+			}
+			a.processMessage(ctx, cls, msg.Timestamp, msg.User, msg.Text, watchChannel, triageChannel, pingGroup, threshold, ownedCats)
+		}
+	}
+	if lastTS == "" {
+		lastTS = fmt.Sprintf("%d.000000", time.Now().Unix())
+	}
 
 	for {
 		select {
@@ -248,7 +272,6 @@ func (a *App) pollLoop(ctx context.Context) {
 			}
 
 			for _, msg := range messages {
-				// Skip bots, thread replies, subtypes, empty
 				if msg.BotID != "" || msg.ThreadTimestamp != "" || msg.SubType != "" || msg.Text == "" {
 					continue
 				}
@@ -256,59 +279,62 @@ func (a *App) pollLoop(ctx context.Context) {
 					continue
 				}
 				lastTS = msg.Timestamp
-
-				processed, _ := a.db.IsMessageProcessed(msg.Timestamp)
-				if processed {
-					continue
-				}
-
-				result, err := cls.Classify(ctx, msg.Text)
-				if err != nil {
-					log.Printf("classify error: %v", err)
-					continue
-				}
-
-				authorName := a.slack.GetUserName(msg.User)
-				_, owned := ownedCats[result.Category]
-				routed := owned && result.Confidence >= threshold
-
-				dbMsg := db.ProcessedMessage{
-					MessageTS:  msg.Timestamp,
-					ChannelID:  watchChannel,
-					Author:     authorName,
-					Category:   result.Category,
-					Confidence: result.Confidence,
-					Summary:    result.Summary,
-					Reasoning:  result.Reasoning,
-					Routed:     routed,
-				}
-				a.db.SaveProcessedMessage(dbMsg)
-
-				if routed {
-					catName := ownedCats[result.Category]
-					pct := int(result.Confidence * 100)
-					emoji := "🟡"
-					if pct >= 80 {
-						emoji = "🟢"
-					} else if pct < 50 {
-						emoji = "🔴"
-					}
-					permalink := a.slack.GetPermalink(watchChannel, msg.Timestamp)
-					triageMsg := fmt.Sprintf("%s *[Confidence: %d%%] %s*\n\n*Summary:* %s\n\n*Original post:* %s\n*Posted by:* %s\n\n%s",
-						emoji, pct, catName, result.Summary, permalink, authorName, pingGroup)
-					a.slack.PostToChannel(triageChannel, triageMsg)
-					a.slack.ReplyInThread(watchChannel, msg.Timestamp, "This support request has been analyzed and the appropriate team has been notified.")
-				}
-
-				runtime.EventsEmit(a.ctx, "triage:event", map[string]interface{}{
-					"message_ts": msg.Timestamp,
-					"author":     authorName,
-					"category":   result.Category,
-					"confidence": result.Confidence,
-					"summary":    result.Summary,
-					"routed":     routed,
-				})
+				a.processMessage(ctx, cls, msg.Timestamp, msg.User, msg.Text, watchChannel, triageChannel, pingGroup, threshold, ownedCats)
 			}
 		}
 	}
+}
+
+func (a *App) processMessage(ctx context.Context, cls *classifier.Classifier, ts, userID, text, watchChannel, triageChannel, pingGroup string, threshold float64, ownedCats map[string]string) {
+	processed, _ := a.db.IsMessageProcessed(ts)
+	if processed {
+		return
+	}
+
+	result, err := cls.Classify(ctx, text)
+	if err != nil {
+		log.Printf("classify error: %v", err)
+		return
+	}
+
+	authorName := a.slack.GetUserName(userID)
+	_, owned := ownedCats[result.Category]
+	routed := owned && result.Confidence >= threshold
+
+	dbMsg := db.ProcessedMessage{
+		MessageTS:  ts,
+		ChannelID:  watchChannel,
+		Author:     authorName,
+		Category:   result.Category,
+		Confidence: result.Confidence,
+		Summary:    result.Summary,
+		Reasoning:  result.Reasoning,
+		Routed:     routed,
+	}
+	a.db.SaveProcessedMessage(dbMsg)
+
+	if routed {
+		catName := ownedCats[result.Category]
+		pct := int(result.Confidence * 100)
+		emoji := "🟡"
+		if pct >= 80 {
+			emoji = "🟢"
+		} else if pct < 50 {
+			emoji = "🔴"
+		}
+		permalink := a.slack.GetPermalink(watchChannel, ts)
+		triageMsg := fmt.Sprintf("%s *[Confidence: %d%%] %s*\n\n*Summary:* %s\n\n*Original post:* %s\n*Posted by:* %s\n\n%s",
+			emoji, pct, catName, result.Summary, permalink, authorName, pingGroup)
+		a.slack.PostToChannel(triageChannel, triageMsg)
+		a.slack.ReplyInThread(watchChannel, ts, "This support request has been analyzed and the appropriate team has been notified.")
+	}
+
+	runtime.EventsEmit(a.ctx, "triage:event", map[string]interface{}{
+		"message_ts": ts,
+		"author":     authorName,
+		"category":   result.Category,
+		"confidence": result.Confidence,
+		"summary":    result.Summary,
+		"routed":     routed,
+	})
 }
