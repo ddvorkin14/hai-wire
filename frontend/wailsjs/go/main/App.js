@@ -121,3 +121,7 @@ export function TestTriageChannel(arg1) {
 export function TestWatchChannel(arg1) {
   return window['go']['main']['App']['TestWatchChannel'](arg1);
 }
+
+export function UnrouteMessage(arg1) {
+  return window['go']['main']['App']['UnrouteMessage'](arg1);
+}

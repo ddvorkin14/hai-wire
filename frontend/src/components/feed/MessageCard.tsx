@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ConfidenceBadge } from '../shared/ConfidenceBadge';
-import { QueueMessage } from '../../../wailsjs/go/main/App';
+import { QueueMessage, UnrouteMessage } from '../../../wailsjs/go/main/App';
 import type { TriageEvent } from '../../types';
 
 interface Props {
@@ -11,11 +11,27 @@ interface Props {
 export function MessageCard({ event, onRouted }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [routing, setRouting] = useState(false);
+  const [unrouting, setUnrouting] = useState(false);
   const [routed, setRouted] = useState(event.routed);
   const [queued, setQueued] = useState(event.status === 'pending');
 
   const categoryLabel = event.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   const pct = Math.round(event.confidence * 100);
+
+  const handleUnroute = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setUnrouting(true);
+    try {
+      await UnrouteMessage(event.message_ts);
+      setRouted(false);
+      setQueued(false);
+      onRouted?.();
+    } catch (err) {
+      console.error('unroute error:', err);
+    } finally {
+      setUnrouting(false);
+    }
+  };
 
   const handleQueue = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -58,6 +74,14 @@ export function MessageCard({ event, onRouted }: Props) {
           )}
           {queued && !routed && (
             <span className="text-xs bg-yellow-400/20 text-yellow-400 px-2 py-0.5 rounded">In Queue</span>
+          )}
+          {routed && (
+            <span
+              onClick={handleUnroute}
+              className="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 px-2 py-0.5 rounded cursor-pointer"
+            >
+              {unrouting ? 'Undoing...' : 'Undo Route'}
+            </span>
           )}
           <span className="text-xs text-slate-600">{categoryLabel}</span>
           <span className="text-xs text-slate-600">{expanded ? '▾' : '▸'}</span>

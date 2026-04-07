@@ -278,6 +278,11 @@ func (a *App) QueueMessage(messageTS string) error {
 	return a.db.UpdateMessageStatus(messageTS, "pending")
 }
 
+// UnrouteMessage reverts a routed message back to classified status.
+func (a *App) UnrouteMessage(messageTS string) error {
+	return a.db.UpdateMessageStatus(messageTS, "classified")
+}
+
 // --- Review Queue ---
 
 func (a *App) GetPendingMessages() ([]db.ProcessedMessage, error) {

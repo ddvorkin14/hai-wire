@@ -173,7 +173,11 @@ func (d *DB) SaveProcessedMessage(msg ProcessedMessage) error {
 
 // UpdateMessageStatus changes the status of a processed message.
 func (d *DB) UpdateMessageStatus(messageTS, status string) error {
-	_, err := d.conn.Exec("UPDATE processed_messages SET status = ? WHERE message_ts = ?", status, messageTS)
+	routed := 0
+	if status == "approved" {
+		routed = 1
+	}
+	_, err := d.conn.Exec("UPDATE processed_messages SET status = ?, routed = ? WHERE message_ts = ?", status, routed, messageTS)
 	return err
 }
 
