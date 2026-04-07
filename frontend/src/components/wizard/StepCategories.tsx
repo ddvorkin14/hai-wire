@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { GetAllCategories, SaveOwnedCategories } from '../../../wailsjs/go/main/App';
+import { GetAllCategories, SaveOwnedCategories, GetOwnedCategories } from '../../../wailsjs/go/main/App';
 import type { Category } from '../../types';
 
 interface Props { onNext: () => void; onBack: () => void; }
@@ -9,7 +9,10 @@ export function StepCategories({ onNext, onBack }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    GetAllCategories().then((cats) => setCategories(cats || []));
+    Promise.all([GetAllCategories(), GetOwnedCategories()]).then(([cats, owned]) => {
+      setCategories(cats || []);
+      if (owned) setSelected(new Set(Object.keys(owned)));
+    });
   }, []);
 
   const toggle = (key: string) => {
@@ -21,7 +24,7 @@ export function StepCategories({ onNext, onBack }: Props) {
     });
   };
 
-  const handleNext = async () => {
+  const handleSave = async () => {
     const owned: Record<string, string> = {};
     categories.forEach((cat) => {
       if (selected.has(cat.Key)) owned[cat.Key] = cat.Name;
@@ -32,8 +35,8 @@ export function StepCategories({ onNext, onBack }: Props) {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold mb-2">Choose Your Categories</h2>
-      <p className="text-slate-400 text-sm mb-4">Check the issue types your squad owns.</p>
+      <h2 className="text-xl font-semibold mb-2">Categories</h2>
+      <p className="text-slate-400 text-sm mb-4">Check the issue types your squad owns. Only these will be routed to your triage channel.</p>
       <div className="max-h-[280px] overflow-y-auto space-y-1 mb-4 pr-2">
         {categories.map((cat) => (
           <label key={cat.Key}
@@ -50,9 +53,9 @@ export function StepCategories({ onNext, onBack }: Props) {
       </div>
       <div className="flex gap-3">
         <button onClick={onBack} className="text-slate-400 hover:text-white px-4 py-2 text-sm">Back</button>
-        <button onClick={handleNext} disabled={selected.size === 0}
+        <button onClick={handleSave} disabled={selected.size === 0}
           className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-900 font-medium px-6 py-2 rounded">
-          Next ({selected.size} selected)
+          Save ({selected.size} selected)
         </button>
       </div>
     </div>
