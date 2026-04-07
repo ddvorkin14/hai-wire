@@ -12,20 +12,18 @@ func NewService(database *db.DB) *Service {
 	return &Service{db: database}
 }
 
-func (s *Service) SetSlackBotToken(token string) error  { return s.db.SetConfig("slack_bot_token", token) }
-func (s *Service) GetSlackBotToken() (string, error)    { return s.db.GetConfig("slack_bot_token") }
-func (s *Service) SetSlackAppToken(token string) error  { return s.db.SetConfig("slack_app_token", token) }
-func (s *Service) GetSlackAppToken() (string, error)    { return s.db.GetConfig("slack_app_token") }
-func (s *Service) SetAnthropicKey(key string) error     { return s.db.SetConfig("anthropic_key", key) }
-func (s *Service) GetAnthropicKey() (string, error)     { return s.db.GetConfig("anthropic_key") }
-func (s *Service) SetWatchChannelID(id string) error    { return s.db.SetConfig("watch_channel_id", id) }
-func (s *Service) GetWatchChannelID() (string, error)   { return s.db.GetConfig("watch_channel_id") }
-func (s *Service) SetTriageChannelID(id string) error   { return s.db.SetConfig("triage_channel_id", id) }
-func (s *Service) GetTriageChannelID() (string, error)  { return s.db.GetConfig("triage_channel_id") }
-func (s *Service) SetSquadName(name string) error       { return s.db.SetConfig("squad_name", name) }
-func (s *Service) GetSquadName() (string, error)        { return s.db.GetConfig("squad_name") }
-func (s *Service) SetPingGroup(group string) error      { return s.db.SetConfig("ping_group", group) }
-func (s *Service) GetPingGroup() (string, error)        { return s.db.GetConfig("ping_group") }
+func (s *Service) SetSlackToken(token string) error    { return s.db.SetConfig("slack_token", token) }
+func (s *Service) GetSlackToken() (string, error)      { return s.db.GetConfig("slack_token") }
+func (s *Service) SetAnthropicKey(key string) error    { return s.db.SetConfig("anthropic_key", key) }
+func (s *Service) GetAnthropicKey() (string, error)    { return s.db.GetConfig("anthropic_key") }
+func (s *Service) SetWatchChannelID(id string) error   { return s.db.SetConfig("watch_channel_id", id) }
+func (s *Service) GetWatchChannelID() (string, error)  { return s.db.GetConfig("watch_channel_id") }
+func (s *Service) SetTriageChannelID(id string) error  { return s.db.SetConfig("triage_channel_id", id) }
+func (s *Service) GetTriageChannelID() (string, error) { return s.db.GetConfig("triage_channel_id") }
+func (s *Service) SetSquadName(name string) error      { return s.db.SetConfig("squad_name", name) }
+func (s *Service) GetSquadName() (string, error)       { return s.db.GetConfig("squad_name") }
+func (s *Service) SetPingGroup(group string) error     { return s.db.SetConfig("ping_group", group) }
+func (s *Service) GetPingGroup() (string, error)       { return s.db.GetConfig("ping_group") }
 
 func (s *Service) SetConfidenceThreshold(threshold string) error {
 	return s.db.SetConfig("confidence_threshold", threshold)
@@ -43,7 +41,7 @@ func (s *Service) GetConfidenceThreshold() (string, error) {
 }
 
 func (s *Service) IsSetupComplete() bool {
-	required := []string{"slack_bot_token", "slack_app_token", "anthropic_key", "watch_channel_id", "triage_channel_id", "squad_name", "ping_group"}
+	required := []string{"slack_token", "anthropic_key", "watch_channel_id", "triage_channel_id", "squad_name", "ping_group"}
 	for _, key := range required {
 		val, err := s.db.GetConfig(key)
 		if err != nil || val == "" {
@@ -54,7 +52,7 @@ func (s *Service) IsSetupComplete() bool {
 }
 
 func (s *Service) GetAllConfig() (map[string]string, error) {
-	keys := []string{"slack_bot_token", "slack_app_token", "anthropic_key", "watch_channel_id", "triage_channel_id", "squad_name", "ping_group", "confidence_threshold"}
+	keys := []string{"slack_token", "anthropic_key", "watch_channel_id", "triage_channel_id", "squad_name", "ping_group", "confidence_threshold"}
 	result := make(map[string]string)
 	for _, key := range keys {
 		val, err := s.db.GetConfig(key)

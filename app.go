@@ -59,15 +59,25 @@ func (a *App) GetAllConfig() (map[string]string, error) {
 	return a.config.GetAllConfig()
 }
 
-func (a *App) SaveSlackTokens(botToken, appToken string) (string, error) {
-	teamName, err := slackclient.ValidateTokens(botToken, appToken)
+// ConnectSlack starts the OAuth flow — opens browser, waits for callback.
+func (a *App) ConnectSlack(clientID, clientSecret string) (string, error) {
+	result, err := slackclient.StartOAuthFlow(clientID, clientSecret)
 	if err != nil {
 		return "", err
 	}
-	if err := a.config.SetSlackBotToken(botToken); err != nil {
+	if err := a.config.SetSlackToken(result.AccessToken); err != nil {
 		return "", err
 	}
-	if err := a.config.SetSlackAppToken(appToken); err != nil {
+	return result.TeamName, nil
+}
+
+// SaveSlackToken saves a manually-entered Slack token and validates it.
+func (a *App) SaveSlackToken(token string) (string, error) {
+	teamName, err := slackclient.ValidateToken(token)
+	if err != nil {
+		return "", err
+	}
+	if err := a.config.SetSlackToken(token); err != nil {
 		return "", err
 	}
 	return teamName, nil
@@ -106,15 +116,11 @@ func (a *App) SaveConfidenceThreshold(threshold string) error {
 // --- Slack bindings ---
 
 func (a *App) ListSlackChannels() ([]slackclient.ChannelInfo, error) {
-	botToken, err := a.config.GetSlackBotToken()
-	if err != nil || botToken == "" {
+	token, err := a.config.GetSlackToken()
+	if err != nil || token == "" {
 		return nil, err
 	}
-	appToken, err := a.config.GetSlackAppToken()
-	if err != nil || appToken == "" {
-		return nil, err
-	}
-	client := slackclient.NewClient(botToken, appToken)
+	client := slackclient.NewClient(token)
 	return client.ListChannels()
 }
 
@@ -131,11 +137,10 @@ func (a *App) StartMonitoring() error {
 		return nil
 	}
 
-	botToken, _ := a.config.GetSlackBotToken()
-	appToken, _ := a.config.GetSlackAppToken()
+	token, _ := a.config.GetSlackToken()
 	apiKey, _ := a.config.GetAnthropicKey()
 
-	sc := slackclient.NewClient(botToken, appToken)
+	sc := slackclient.NewClient(token)
 	cls := classifier.NewClassifier(apiKey)
 	a.orchestrator = triage.NewOrchestrator(a.db, a.config, cls, sc)
 

@@ -6,6 +6,7 @@ import (
 	"log"
 	"strconv"
 	"sync"
+	"time"
 
 	"hai-wire/internal/classifier"
 	"hai-wire/internal/config"
@@ -33,6 +34,7 @@ type Orchestrator struct {
 	cancel     context.CancelFunc
 	mu         sync.Mutex
 	running    bool
+	lastPollTS string
 }
 
 func NewOrchestrator(database *db.DB, cfg *config.Service, cls *classifier.Classifier, sc *slackclient.Client) *Orchestrator {
@@ -64,18 +66,10 @@ func (o *Orchestrator) Start() error {
 	o.cancel = cancel
 	o.running = true
 
-	o.slack.SetMessageHandler(func(channelID, messageTS, userID, text string) {
-		o.handleMessage(ctx, channelID, messageTS, userID, text)
-	})
+	// Set initial poll timestamp to now (only process new messages)
+	o.lastPollTS = fmt.Sprintf("%d.000000", time.Now().Unix())
 
-	go func() {
-		if err := o.slack.Listen(ctx, watchChannel); err != nil {
-			log.Printf("slack listener error: %v", err)
-		}
-		o.mu.Lock()
-		o.running = false
-		o.mu.Unlock()
-	}()
+	go o.pollLoop(ctx, watchChannel)
 
 	return nil
 }
@@ -93,6 +87,43 @@ func (o *Orchestrator) IsRunning() bool {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	return o.running
+}
+
+func (o *Orchestrator) pollLoop(ctx context.Context, watchChannel string) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	// Do an initial poll immediately
+	o.poll(ctx, watchChannel)
+
+	for {
+		select {
+		case <-ctx.Done():
+			o.mu.Lock()
+			o.running = false
+			o.mu.Unlock()
+			return
+		case <-ticker.C:
+			o.poll(ctx, watchChannel)
+		}
+	}
+}
+
+func (o *Orchestrator) poll(ctx context.Context, watchChannel string) {
+	messages, err := o.slack.FetchNewMessages(watchChannel, o.lastPollTS)
+	if err != nil {
+		log.Printf("poll error: %v", err)
+		return
+	}
+
+	for _, msg := range messages {
+		// Update last poll timestamp
+		if msg.Timestamp > o.lastPollTS {
+			o.lastPollTS = msg.Timestamp
+		}
+
+		o.handleMessage(ctx, msg.ChannelID, msg.Timestamp, msg.UserID, msg.Text)
+	}
 }
 
 func (o *Orchestrator) handleMessage(ctx context.Context, channelID, messageTS, userID, text string) {
