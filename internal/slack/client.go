@@ -474,26 +474,47 @@ func indexOfAny(s, chars string) int {
 	return -1
 }
 
-// FormatMention formats a ping group for proper Slack rendering.
-// Input can be: subteam ID (S0XXX), @handle, or <!subteam^ID>.
+// FormatMention formats a ping target for proper Slack rendering.
+// Input can be: user ID (U0XXX), subteam ID (S0XXX), <!subteam^ID>, or @handle.
 func FormatMention(input string) string {
 	if input == "" {
 		return ""
 	}
+	// Strip leading @
+	clean := input
+	if len(clean) > 0 && clean[0] == '@' {
+		clean = clean[1:]
+	}
 	// Already formatted
-	if len(input) > 10 && input[:10] == "<!subteam^" {
-		return input
+	if len(clean) > 10 && clean[:10] == "<!subteam^" {
+		return clean
 	}
-	// Raw subteam ID
-	if len(input) > 1 && input[0] == 'S' {
-		return "<!subteam^" + input + ">"
+	if len(clean) > 2 && clean[:2] == "<@" {
+		return clean
 	}
-	// User ID
-	if len(input) > 1 && input[0] == 'U' {
-		return "<@" + input + ">"
+	// Raw subteam ID (starts with S, followed by uppercase/digits)
+	if len(clean) > 1 && clean[0] == 'S' && isUpperAlphaNum(clean[1:]) {
+		return "<!subteam^" + clean + ">"
 	}
-	// @handle -- just pass through, won't render as a mention but better than nothing
-	return input
+	// User ID (starts with U, followed by uppercase/digits)
+	if len(clean) > 1 && clean[0] == 'U' && isUpperAlphaNum(clean[1:]) {
+		return "<@" + clean + ">"
+	}
+	// Plain handle -- can't be rendered as a clickable mention without the ID
+	// but wrap in @ so it's at least visible
+	return "@" + clean
+}
+
+func isUpperAlphaNum(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	for _, c := range s {
+		if !((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Client) GetPermalink(channelID, messageTS string) string {
