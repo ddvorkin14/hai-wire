@@ -13,7 +13,8 @@ type ChannelInfo struct {
 }
 
 type Client struct {
-	api *slack.Client
+	api    *slack.Client
+	teamID string
 }
 
 // NewClientFromKeychain creates a Slack client using Claude Code's stored token.
@@ -22,12 +23,24 @@ func NewClientFromKeychain() (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{api: slack.New(token)}, nil
+	c := &Client{api: slack.New(token)}
+	// Get team ID (required for user tokens)
+	resp, err := c.api.AuthTest()
+	if err != nil {
+		return nil, fmt.Errorf("slack auth failed: %w", err)
+	}
+	c.teamID = resp.TeamID
+	return c, nil
 }
 
 // NewClient creates a Slack client from a token directly.
 func NewClient(token string) *Client {
-	return &Client{api: slack.New(token)}
+	c := &Client{api: slack.New(token)}
+	resp, err := c.api.AuthTest()
+	if err == nil {
+		c.teamID = resp.TeamID
+	}
+	return c
 }
 
 // ValidateConnection checks the token works and returns the workspace name.
@@ -36,24 +49,34 @@ func (c *Client) ValidateConnection() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("slack auth failed: %w", err)
 	}
+	c.teamID = resp.TeamID
 	return resp.Team, nil
 }
 
 func (c *Client) ListChannels() ([]ChannelInfo, error) {
+	var allChannels []ChannelInfo
 	params := &slack.GetConversationsParameters{
 		Types:           []string{"public_channel", "private_channel"},
 		ExcludeArchived: true,
+		TeamID:          c.teamID,
 		Limit:           200,
 	}
-	channels, _, err := c.api.GetConversations(params)
-	if err != nil {
-		return nil, err
+
+	for {
+		channels, cursor, err := c.api.GetConversations(params)
+		if err != nil {
+			return nil, err
+		}
+		for _, ch := range channels {
+			allChannels = append(allChannels, ChannelInfo{ID: ch.ID, Name: ch.Name})
+		}
+		if cursor == "" {
+			break
+		}
+		params.Cursor = cursor
 	}
-	var result []ChannelInfo
-	for _, ch := range channels {
-		result = append(result, ChannelInfo{ID: ch.ID, Name: ch.Name})
-	}
-	return result, nil
+
+	return allChannels, nil
 }
 
 func (c *Client) FetchNewMessages(channelID, oldest string) ([]slack.Message, error) {

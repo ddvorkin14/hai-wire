@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { EventsOn } from '../../../wailsjs/runtime/runtime';
-import { IsMonitoring, StartMonitoring, StopMonitoring } from '../../../wailsjs/go/main/App';
+import { IsMonitoring, StartMonitoring, StopMonitoring, GetProcessedMessages } from '../../../wailsjs/go/main/App';
 import { MessageCard } from './MessageCard';
-import type { TriageEvent } from '../../types';
+import type { TriageEvent, ProcessedMessage } from '../../types';
 
 export function LiveFeed() {
   const [events, setEvents] = useState<TriageEvent[]>([]);
@@ -10,6 +10,22 @@ export function LiveFeed() {
 
   useEffect(() => {
     IsMonitoring().then(setRunning);
+
+    // Load recent history if feed is empty
+    GetProcessedMessages(20).then((msgs) => {
+      if (msgs && msgs.length > 0) {
+        const mapped: TriageEvent[] = msgs.map((m: ProcessedMessage) => ({
+          message_ts: m.MessageTS,
+          author: m.Author,
+          category: m.Category,
+          confidence: m.Confidence,
+          summary: m.Summary,
+          routed: m.Routed,
+        }));
+        setEvents(mapped);
+      }
+    });
+
     EventsOn('triage:event', (event: TriageEvent) => {
       setEvents((prev) => [event, ...prev]);
     });
@@ -45,10 +61,10 @@ export function LiveFeed() {
       <div className="flex-1 overflow-y-auto space-y-3">
         {events.length === 0 ? (
           <div className="text-slate-500 text-sm text-center mt-12">
-            {running ? 'Waiting for messages...' : 'Start monitoring to see classified messages.'}
+            {running ? 'Waiting for new messages...' : 'Start monitoring to see classified messages.'}
           </div>
         ) : (
-          events.map((event) => <MessageCard key={event.message_ts} event={event} />)
+          events.map((event, i) => <MessageCard key={event.message_ts || i} event={event} />)
         )}
       </div>
     </div>
