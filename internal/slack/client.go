@@ -1,9 +1,11 @@
 package slack
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
+	"net/http"
+	"net/url"
 
 	"github.com/slack-go/slack"
 )
@@ -15,6 +17,7 @@ type ChannelInfo struct {
 
 type Client struct {
 	api    *slack.Client
+	token  string
 	teamID string
 	userID string
 }
@@ -25,7 +28,7 @@ func NewClientFromKeychain() (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &Client{api: slack.New(token)}
+	c := &Client{api: slack.New(token), token: token}
 	resp, err := c.api.AuthTest()
 	if err != nil {
 		return nil, fmt.Errorf("slack auth failed: %w", err)
@@ -35,14 +38,18 @@ func NewClientFromKeychain() (*Client, error) {
 	// For Enterprise Grid, the auth.test team_id is the enterprise ID.
 	// We need the actual workspace team ID from auth.teams.list.
 	if resp.EnterpriseID != "" {
-		c.teamID, err = c.resolveWorkspaceTeamID()
-		if err != nil {
-			log.Printf("Could not resolve workspace team ID, using enterprise ID: %v", err)
+		resolved, resolveErr := c.resolveWorkspaceTeamID()
+		if resolveErr != nil {
+			log.Printf("Could not resolve workspace team ID: %v, using auth.test team_id: %s", resolveErr, resp.TeamID)
 			c.teamID = resp.TeamID
+		} else {
+			log.Printf("Resolved workspace team ID: %s (enterprise: %s)", resolved, resp.EnterpriseID)
+			c.teamID = resolved
 		}
 	} else {
 		c.teamID = resp.TeamID
 	}
+	log.Printf("Slack client initialized: teamID=%s, userID=%s", c.teamID, c.userID)
 	return c, nil
 }
 
@@ -75,8 +82,13 @@ func (c *Client) ValidateConnection() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("slack auth failed: %w", err)
 	}
-	c.teamID = resp.TeamID
-	c.userID = resp.UserID
+	// Don't overwrite teamID if it was already resolved to workspace ID
+	if c.teamID == "" {
+		c.teamID = resp.TeamID
+	}
+	if c.userID == "" {
+		c.userID = resp.UserID
+	}
 	return resp.Team, nil
 }
 
@@ -271,26 +283,122 @@ func (c *Client) tryResolveGroupName(groupID string) string {
 	return ""
 }
 
-// SearchMentionTargets filters the extracted mention targets by query string.
-func (c *Client) SearchMentionTargets(channelID, query string) ([]MentionTarget, error) {
-	all, err := c.ExtractMentionTargets(channelID)
-	if err != nil {
-		return nil, err
-	}
+// LoadAllMentionTargets loads all users from the workspace and groups from channel messages.
+// This is meant to be called once and cached on the frontend.
+func (c *Client) LoadAllMentionTargets(channelID string) ([]MentionTarget, error) {
+	var targets []MentionTarget
 
-	if query == "" {
-		return all, nil
-	}
-
-	query = strings.ToLower(query)
-	var results []MentionTarget
-	for _, t := range all {
-		if strings.Contains(strings.ToLower(t.Name), query) ||
-			strings.Contains(strings.ToLower(t.ID), query) {
-			results = append(results, t)
+	// 1. Load groups from channel messages
+	if channelID != "" {
+		groups, err := c.ExtractMentionTargets(channelID)
+		if err == nil {
+			// Only keep groups from extraction, we'll get users from API
+			for _, g := range groups {
+				if g.Type == "group" {
+					targets = append(targets, g)
+				}
+			}
 		}
 	}
-	return results, nil
+
+	// 2. Load workspace users via raw HTTP (slack-go's GetUsers has issues with Enterprise Grid)
+	users, err := c.fetchUsersRaw()
+	if err != nil {
+		log.Printf("LoadAllMentionTargets: users fetch error: %v", err)
+		return targets, nil
+	}
+
+	for _, u := range users {
+		targets = append(targets, MentionTarget{ID: u.ID, Name: u.Name, Type: "user"})
+	}
+
+	log.Printf("LoadAllMentionTargets: loaded %d targets (%d users, %d groups)", len(targets), len(users), len(targets)-len(users))
+	return targets, nil
+}
+
+type rawUser struct {
+	ID   string
+	Name string
+}
+
+func (c *Client) fetchUsersRaw() ([]rawUser, error) {
+	return c.fetchUsersHTTP()
+}
+
+func (c *Client) fetchUsersHTTP() ([]rawUser, error) {
+	var allUsers []rawUser
+	cursor := ""
+
+	for page := 0; page < 50; page++ {
+		apiURL := fmt.Sprintf("https://slack.com/api/users.list?limit=200&team_id=%s", c.teamID)
+		if cursor != "" {
+			apiURL += "&cursor=" + url.QueryEscape(cursor)
+		}
+
+		req, err := http.NewRequest("GET", apiURL, nil)
+		if err != nil {
+			return allUsers, err
+		}
+		req.Header.Set("Authorization", "Bearer "+c.token)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return allUsers, err
+		}
+
+		var result struct {
+			OK      bool `json:"ok"`
+			Members []struct {
+				ID       string `json:"id"`
+				Deleted  bool   `json:"deleted"`
+				IsBot    bool   `json:"is_bot"`
+				RealName string `json:"real_name"`
+				Name     string `json:"name"`
+				Profile  struct {
+					DisplayName string `json:"display_name"`
+					RealName    string `json:"real_name"`
+				} `json:"profile"`
+			} `json:"members"`
+			ResponseMetadata struct {
+				NextCursor string `json:"next_cursor"`
+			} `json:"response_metadata"`
+			Error string `json:"error"`
+		}
+
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+		if err != nil {
+			return allUsers, err
+		}
+		if !result.OK {
+			return allUsers, fmt.Errorf("users.list: %s", result.Error)
+		}
+
+		for _, m := range result.Members {
+			if m.Deleted || m.IsBot || m.ID == "USLACKBOT" {
+				continue
+			}
+			name := m.RealName
+			if name == "" {
+				name = m.Profile.DisplayName
+			}
+			if name == "" {
+				name = m.Profile.RealName
+			}
+			if name == "" {
+				name = m.Name
+			}
+			if name != "" {
+				allUsers = append(allUsers, rawUser{ID: m.ID, Name: name})
+			}
+		}
+
+		cursor = result.ResponseMetadata.NextCursor
+		if cursor == "" {
+			break
+		}
+	}
+	return allUsers, nil
 }
 
 // MentionGroup kept for backward compat with bindings

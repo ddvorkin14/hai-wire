@@ -26,10 +26,6 @@ export function GetAutoApprovalRules() {
   return window['go']['main']['App']['GetAutoApprovalRules']();
 }
 
-export function GetMentionGroups() {
-  return window['go']['main']['App']['GetMentionGroups']();
-}
-
 export function GetOwnedCategories() {
   return window['go']['main']['App']['GetOwnedCategories']();
 }
@@ -64,6 +60,10 @@ export function IsSlackConnected() {
 
 export function ListSlackChannels() {
   return window['go']['main']['App']['ListSlackChannels']();
+}
+
+export function LoadAllMentionTargets() {
+  return window['go']['main']['App']['LoadAllMentionTargets']();
 }
 
 export function QueueMessage(arg1) {
@@ -108,10 +108,6 @@ export function SaveSquadConfig(arg1, arg2, arg3) {
 
 export function SaveWatchChannel(arg1) {
   return window['go']['main']['App']['SaveWatchChannel'](arg1);
-}
-
-export function SearchMentionTargets(arg1) {
-  return window['go']['main']['App']['SearchMentionTargets'](arg1);
 }
 
 export function StartMonitoring() {
