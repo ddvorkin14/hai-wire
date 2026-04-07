@@ -114,21 +114,10 @@ export function Settings() {
 
   const searchMentions = async (query: string) => {
     setMentionSearch(query);
-    if (query.length < 2) {
-      setMentionTargets([]);
-      return;
-    }
     setLoadingTargets(true);
     try {
-      // Search users + load channel groups in parallel
-      const [users, groups] = await Promise.all([
-        SearchMentionTargets(query).catch(() => []),
-        GetMentionGroups().catch(() => []),
-      ]);
-      const filtered = (groups || []).filter((g: MentionTarget) =>
-        g.name.toLowerCase().includes(query.toLowerCase())
-      );
-      setMentionTargets([...filtered, ...(users || [])]);
+      const results = await SearchMentionTargets(query);
+      setMentionTargets(results || []);
     } catch {}
     setLoadingTargets(false);
   };
@@ -223,7 +212,8 @@ export function Settings() {
                 <input
                   value={mentionSearch}
                   onChange={(e) => searchMentions(e.target.value)}
-                  placeholder="Search for a user or group..."
+                  onFocus={() => { if (mentionTargets.length === 0) searchMentions(''); }}
+                  placeholder="Search users and groups from your watch channel..."
                   className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400"
                 />
                 {loadingTargets && (

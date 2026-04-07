@@ -173,12 +173,16 @@ func (a *App) GetMentionGroups() ([]slackclient.MentionTarget, error) {
 	return a.slack.ExtractMentionTargets(watchChannel)
 }
 
-// SearchMentionTargets searches for users by name.
+// SearchMentionTargets searches mention targets extracted from the watch channel.
 func (a *App) SearchMentionTargets(query string) ([]slackclient.MentionTarget, error) {
 	if a.slack == nil {
 		return nil, fmt.Errorf("Slack not connected")
 	}
-	return a.slack.SearchUsers(query)
+	watchChannel, _ := a.config.GetWatchChannelID()
+	if watchChannel == "" {
+		return nil, fmt.Errorf("Watch channel not configured")
+	}
+	return a.slack.SearchMentionTargets(watchChannel, query)
 }
 
 // TestWatchChannel verifies we can read from the watch channel (no message sent).

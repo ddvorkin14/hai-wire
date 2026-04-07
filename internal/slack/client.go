@@ -150,16 +150,15 @@ type MentionTarget struct {
 }
 
 // ExtractMentionTargets scans recent messages in a channel for <!subteam^ID> and <@USER_ID>
-// patterns, resolves names, and returns unique targets.
+// patterns, resolves full names via API, and returns unique targets.
 func (c *Client) ExtractMentionTargets(channelID string) ([]MentionTarget, error) {
 	msgs, err := c.FetchNewMessages(channelID, "")
 	if err != nil {
 		return nil, err
 	}
 
-	seenGroups := make(map[string]bool)
-	seenUsers := make(map[string]bool)
-	var targets []MentionTarget
+	groupHandles := make(map[string]string) // id -> best handle found
+	userIDs := make(map[string]bool)
 
 	for _, msg := range msgs {
 		text := msg.Text
@@ -176,29 +175,25 @@ func (c *Client) ExtractMentionTargets(channelID string) ([]MentionTarget, error
 				break
 			}
 			id := rest[:endIdx]
-			if !seenGroups[id] {
-				seenGroups[id] = true
-				handle := ""
-				if endIdx < len(rest) && rest[endIdx] == '|' {
-					handleEnd := indexOf(rest[endIdx+1:], ">")
-					if handleEnd != -1 {
-						handle = rest[endIdx+1 : endIdx+1+handleEnd]
-					}
+			handle := ""
+			if endIdx < len(rest) && rest[endIdx] == '|' {
+				handleEnd := indexOf(rest[endIdx+1:], ">")
+				if handleEnd != -1 {
+					handle = rest[endIdx+1 : endIdx+1+handleEnd]
 				}
-				name := handle
-				if name == "" {
-					name = id
+			}
+			// Keep the best handle we've seen (non-empty preferred)
+			if handle != "" || groupHandles[id] == "" {
+				if handle != "" {
+					groupHandles[id] = handle
+				} else if groupHandles[id] == "" {
+					groupHandles[id] = id
 				}
-				// Clean up handle -- remove leading @
-				if len(name) > 0 && name[0] == '@' {
-					name = name[1:]
-				}
-				targets = append(targets, MentionTarget{ID: id, Name: name, Type: "group"})
 			}
 			text = rest[endIdx:]
 		}
 
-		// Extract <@USER_ID> or <@USER_ID|display_name>
+		// Extract <@USER_ID>
 		text = msg.Text
 		for {
 			idx := indexOf(text, "<@")
@@ -211,61 +206,64 @@ func (c *Client) ExtractMentionTargets(channelID string) ([]MentionTarget, error
 				break
 			}
 			id := rest[:endIdx]
-			if len(id) > 0 && id[0] == 'U' && !seenUsers[id] {
-				seenUsers[id] = true
-				// Try to get display name from the mention itself
-				name := ""
-				if endIdx < len(rest) && rest[endIdx] == '|' {
-					nameEnd := indexOf(rest[endIdx+1:], ">")
-					if nameEnd != -1 {
-						name = rest[endIdx+1 : endIdx+1+nameEnd]
-					}
-				}
-				// If no inline name, resolve via API
-				if name == "" {
-					name = c.GetUserName(id)
-				}
-				targets = append(targets, MentionTarget{ID: id, Name: name, Type: "user"})
+			if len(id) > 0 && id[0] == 'U' {
+				userIDs[id] = true
 			}
 			text = rest[endIdx:]
 		}
 	}
+
+	var targets []MentionTarget
+
+	// Resolve group names -- clean up handles
+	for id, handle := range groupHandles {
+		name := handle
+		if len(name) > 0 && name[0] == '@' {
+			name = name[1:]
+		}
+		// Replace hyphens with spaces and title case for display
+		if name == id {
+			name = "Group " + id // Couldn't resolve name
+		}
+		targets = append(targets, MentionTarget{ID: id, Name: name, Type: "group"})
+	}
+
+	// Resolve user names via API (full names, not just first names)
+	for id := range userIDs {
+		user, err := c.api.GetUserInfo(id)
+		if err != nil {
+			continue
+		}
+		name := user.RealName
+		if name == "" {
+			name = user.Profile.DisplayName
+		}
+		if name == "" {
+			name = user.Name
+		}
+		targets = append(targets, MentionTarget{ID: id, Name: name, Type: "user"})
+	}
+
 	return targets, nil
 }
 
-// SearchUsers searches for Slack users by name using the paginated API.
-func (c *Client) SearchUsers(query string) ([]MentionTarget, error) {
+// SearchMentionTargets filters the extracted mention targets by query string.
+func (c *Client) SearchMentionTargets(channelID, query string) ([]MentionTarget, error) {
+	all, err := c.ExtractMentionTargets(channelID)
+	if err != nil {
+		return nil, err
+	}
+
+	if query == "" {
+		return all, nil
+	}
+
 	query = strings.ToLower(query)
 	var results []MentionTarget
-
-	opts := []slack.GetUsersOption{
-		slack.GetUsersOptionTeamID(c.teamID),
-		slack.GetUsersOptionLimit(200),
-	}
-
-	users, err := c.api.GetUsers(opts...)
-	if err != nil {
-		log.Printf("SearchUsers error: %v", err)
-		return nil, nil
-	}
-
-	for _, u := range users {
-		if u.Deleted || u.IsBot {
-			continue
-		}
-		name := u.Profile.DisplayName
-		if name == "" {
-			name = u.RealName
-		}
-		if name == "" {
-			continue
-		}
-		if strings.Contains(strings.ToLower(name), query) ||
-			strings.Contains(strings.ToLower(u.Name), query) {
-			results = append(results, MentionTarget{ID: u.ID, Name: name, Type: "user"})
-		}
-		if len(results) >= 15 {
-			break
+	for _, t := range all {
+		if strings.Contains(strings.ToLower(t.Name), query) ||
+			strings.Contains(strings.ToLower(t.ID), query) {
+			results = append(results, t)
 		}
 	}
 	return results, nil
