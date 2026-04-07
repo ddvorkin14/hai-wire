@@ -38,4 +38,6 @@ export function StartMonitoring():Promise<void>;
 
 export function StopMonitoring():Promise<void>;
 
-export function TestChannel(arg1:string):Promise<string>;
+export function TestTriageChannel(arg1:string):Promise<string>;
+
+export function TestWatchChannel(arg1:string):Promise<string>;

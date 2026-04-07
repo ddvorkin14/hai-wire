@@ -161,16 +161,28 @@ func (a *App) SaveConfidenceThreshold(threshold string) error {
 	return a.config.SetConfidenceThreshold(threshold)
 }
 
-// TestChannel sends a test message to a channel to verify it works.
-func (a *App) TestChannel(channelID string) (string, error) {
+// TestWatchChannel verifies we can read from the watch channel (no message sent).
+func (a *App) TestWatchChannel(channelID string) (string, error) {
 	if a.slack == nil {
 		return "", fmt.Errorf("Slack not connected")
 	}
-	err := a.slack.PostToChannel(channelID, "HAI-Wire test message -- if you see this, the channel is configured correctly.")
+	msgs, err := a.slack.FetchNewMessages(channelID, "")
+	if err != nil {
+		return "", fmt.Errorf("Cannot read channel: %v", err)
+	}
+	return fmt.Sprintf("Connected -- %d recent messages found", len(msgs)), nil
+}
+
+// TestTriageChannel sends a test message to the triage channel to verify posting works.
+func (a *App) TestTriageChannel(channelID string) (string, error) {
+	if a.slack == nil {
+		return "", fmt.Errorf("Slack not connected")
+	}
+	err := a.slack.PostToChannel(channelID, "HAI-Wire test -- if you see this, your triage channel is configured correctly.")
 	if err != nil {
 		return "", fmt.Errorf("Failed to post: %v", err)
 	}
-	return "Message sent successfully", nil
+	return "Test message sent", nil
 }
 
 // --- Categories ---

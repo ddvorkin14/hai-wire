@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   GetAllConfig, GetOwnedCategories, GetAllCategories,
   SaveSquadConfig, SaveOwnedCategories, SaveConfidenceThreshold, SaveWatchChannel,
-  SaveAnthropicKey, IsSlackConnected, GetSlackStatus, ReconnectSlack, TestChannel,
+  SaveAnthropicKey, IsSlackConnected, GetSlackStatus, ReconnectSlack, TestWatchChannel, TestTriageChannel,
 } from '../../../wailsjs/go/main/App';
 import type { Category } from '../../types';
 
@@ -51,17 +51,29 @@ export function Settings() {
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const handleTestChannel = async (channelId: string, label: string) => {
-    if (!channelId) return;
-    setTesting((prev) => ({ ...prev, [label]: true }));
-    setTestResult((prev) => ({ ...prev, [label]: { ok: false, msg: '' } }));
+  const handleTestWatch = async () => {
+    if (!config.watch_channel_id) return;
+    setTesting((prev) => ({ ...prev, watch: true }));
     try {
-      const msg = await TestChannel(channelId);
-      setTestResult((prev) => ({ ...prev, [label]: { ok: true, msg } }));
+      const msg = await TestWatchChannel(config.watch_channel_id);
+      setTestResult((prev) => ({ ...prev, watch: { ok: true, msg } }));
     } catch (e: any) {
-      setTestResult((prev) => ({ ...prev, [label]: { ok: false, msg: e?.message || 'Failed' } }));
+      setTestResult((prev) => ({ ...prev, watch: { ok: false, msg: e?.message || 'Failed' } }));
     } finally {
-      setTesting((prev) => ({ ...prev, [label]: false }));
+      setTesting((prev) => ({ ...prev, watch: false }));
+    }
+  };
+
+  const handleTestTriage = async () => {
+    if (!config.triage_channel_id) return;
+    setTesting((prev) => ({ ...prev, triage: true }));
+    try {
+      const msg = await TestTriageChannel(config.triage_channel_id);
+      setTestResult((prev) => ({ ...prev, triage: { ok: true, msg } }));
+    } catch (e: any) {
+      setTestResult((prev) => ({ ...prev, triage: { ok: false, msg: e?.message || 'Failed' } }));
+    } finally {
+      setTesting((prev) => ({ ...prev, triage: false }));
     }
   };
 
@@ -154,10 +166,10 @@ export function Settings() {
                   placeholder="Channel ID (e.g., C08MXC8URS8)"
                   className="flex-1 bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400" />
                 <button
-                  onClick={() => handleTestChannel(config.watch_channel_id, 'watch')}
+                  onClick={handleTestWatch}
                   disabled={!config.watch_channel_id || testing.watch || !slackConnected}
                   className="bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-slate-300 text-xs px-3 py-2 rounded whitespace-nowrap">
-                  {testing.watch ? 'Testing...' : 'Test'}
+                  {testing.watch ? 'Checking...' : 'Check'}
                 </button>
               </div>
               {testResult.watch && (
@@ -179,10 +191,10 @@ export function Settings() {
                   placeholder="Channel ID (e.g., C0XXXXXXXXX)"
                   className="flex-1 bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400" />
                 <button
-                  onClick={() => handleTestChannel(config.triage_channel_id, 'triage')}
+                  onClick={handleTestTriage}
                   disabled={!config.triage_channel_id || testing.triage || !slackConnected}
                   className="bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-slate-300 text-xs px-3 py-2 rounded whitespace-nowrap">
-                  {testing.triage ? 'Testing...' : 'Test'}
+                  {testing.triage ? 'Sending...' : 'Send Test'}
                 </button>
               </div>
               {testResult.triage && (

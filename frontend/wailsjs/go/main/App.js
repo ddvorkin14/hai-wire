@@ -70,6 +70,10 @@ export function StopMonitoring() {
   return window['go']['main']['App']['StopMonitoring']();
 }
 
-export function TestChannel(arg1) {
-  return window['go']['main']['App']['TestChannel'](arg1);
+export function TestTriageChannel(arg1) {
+  return window['go']['main']['App']['TestTriageChannel'](arg1);
+}
+
+export function TestWatchChannel(arg1) {
+  return window['go']['main']['App']['TestWatchChannel'](arg1);
 }
