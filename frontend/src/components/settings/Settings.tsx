@@ -18,11 +18,26 @@ export function Settings() {
   const [testing, setTesting] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    GetAllConfig().then(setConfig);
-    GetOwnedCategories().then((cats) => setOwnedCats(cats || {}));
-    GetAllCategories().then((cats) => setAllCats(cats || []));
-    IsSlackConnected().then(setSlackConnected).catch(() => setSlackConnected(false));
-    GetSlackStatus().then((s) => { if (s.team) setSlackTeam(s.team); });
+    Promise.all([
+      GetAllConfig(),
+      GetOwnedCategories(),
+      GetAllCategories(),
+      IsSlackConnected().catch(() => false),
+      GetSlackStatus(),
+    ]).then(([cfg, owned, cats, slack, slackStatus]) => {
+      setConfig(cfg);
+      setAllCats(cats || []);
+      setSlackConnected(slack as boolean);
+      if (slackStatus.team) setSlackTeam(slackStatus.team);
+
+      // Filter owned categories to only include keys that exist in current category set
+      const validKeys = new Set((cats || []).map((c: Category) => c.Key));
+      const filtered: Record<string, string> = {};
+      for (const [k, v] of Object.entries(owned || {})) {
+        if (validKeys.has(k)) filtered[k] = v;
+      }
+      setOwnedCats(filtered);
+    });
   }, []);
 
   const update = (key: string, value: string) => {

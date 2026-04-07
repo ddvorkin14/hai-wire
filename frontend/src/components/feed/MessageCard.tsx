@@ -1,20 +1,40 @@
 import { useState } from 'react';
 import { ConfidenceBadge } from '../shared/ConfidenceBadge';
+import { ApproveMessage } from '../../../wailsjs/go/main/App';
 import type { TriageEvent } from '../../types';
 
-interface Props { event: TriageEvent; }
+interface Props {
+  event: TriageEvent;
+  onRouted?: () => void;
+}
 
-export function MessageCard({ event }: Props) {
+export function MessageCard({ event, onRouted }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [routing, setRouting] = useState(false);
+  const [routed, setRouted] = useState(event.routed);
 
   const categoryLabel = event.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   const pct = Math.round(event.confidence * 100);
+
+  const handleRoute = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRouting(true);
+    try {
+      await ApproveMessage(event.message_ts);
+      setRouted(true);
+      onRouted?.();
+    } catch (err) {
+      console.error('route error:', err);
+    } finally {
+      setRouting(false);
+    }
+  };
 
   return (
     <button
       onClick={() => setExpanded(!expanded)}
       className={`w-full text-left p-4 rounded-lg border transition-colors ${
-        event.routed ? 'bg-slate-800 border-amber-400/30' : 'bg-slate-800/50 border-slate-700'
+        routed ? 'bg-slate-800 border-amber-400/30' : 'bg-slate-800/50 border-slate-700'
       } hover:border-slate-500`}
     >
       {/* Header row */}
@@ -22,11 +42,22 @@ export function MessageCard({ event }: Props) {
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-medium text-sm truncate">{event.author}</span>
           <ConfidenceBadge confidence={event.confidence} />
-          {event.routed && (
+          {routed && (
             <span className="text-xs bg-amber-400/20 text-amber-400 px-2 py-0.5 rounded shrink-0">Routed</span>
+          )}
+          {event.status === 'pending' && !routed && (
+            <span className="text-xs bg-yellow-400/20 text-yellow-400 px-2 py-0.5 rounded shrink-0">Pending</span>
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {!routed && (
+            <span
+              onClick={handleRoute}
+              className="text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 px-2 py-0.5 rounded cursor-pointer"
+            >
+              {routing ? 'Routing...' : 'Route'}
+            </span>
+          )}
           <span className="text-xs text-slate-600">{categoryLabel}</span>
           <span className="text-xs text-slate-600">{expanded ? '▾' : '▸'}</span>
         </div>
@@ -35,7 +66,7 @@ export function MessageCard({ event }: Props) {
       {/* Summary */}
       <p className="text-sm text-slate-300 mb-2">{event.summary}</p>
 
-      {/* Confidence reasoning -- always visible */}
+      {/* Confidence reasoning */}
       {event.reasoning && (
         <div className={`rounded px-3 py-2 text-xs ${
           pct >= 80 ? 'bg-green-900/20 border border-green-800/30 text-green-400/80' :
@@ -51,7 +82,8 @@ export function MessageCard({ event }: Props) {
         <div className="mt-3 pt-3 border-t border-slate-700">
           <div className="flex gap-4 text-xs text-slate-500">
             <span>Category key: <span className="text-slate-400 font-mono">{event.category}</span></span>
-            <span>Message TS: <span className="text-slate-400 font-mono">{event.message_ts}</span></span>
+            <span>Status: <span className="text-slate-400">{event.status || (routed ? 'approved' : 'classified')}</span></span>
+            <span>TS: <span className="text-slate-400 font-mono">{event.message_ts}</span></span>
           </div>
         </div>
       )}
