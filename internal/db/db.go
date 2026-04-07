@@ -51,6 +51,9 @@ func (d *DB) Close() error {
 }
 
 func (d *DB) migrate() error {
+	// First, migrate existing tables (these silently fail if column/table already exists)
+	d.conn.Exec("ALTER TABLE processed_messages ADD COLUMN status TEXT NOT NULL DEFAULT 'classified'")
+
 	schema := `
 	CREATE TABLE IF NOT EXISTS config (
 		key   TEXT PRIMARY KEY,
