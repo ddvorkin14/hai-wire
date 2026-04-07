@@ -125,18 +125,20 @@ export namespace slack {
 	        this.name = source["name"];
 	    }
 	}
-	export class MentionGroup {
+	export class MentionTarget {
 	    id: string;
-	    handle: string;
+	    name: string;
+	    type: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new MentionGroup(source);
+	        return new MentionTarget(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
-	        this.handle = source["handle"];
+	        this.name = source["name"];
+	        this.type = source["type"];
 	    }
 	}
 

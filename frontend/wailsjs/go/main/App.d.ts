@@ -16,7 +16,7 @@ export function GetAllConfig():Promise<Record<string, string>>;
 
 export function GetAutoApprovalRules():Promise<Array<db.AutoApprovalRule>>;
 
-export function GetMentionGroups():Promise<Array<slack.MentionGroup>>;
+export function GetMentionGroups():Promise<Array<slack.MentionTarget>>;
 
 export function GetOwnedCategories():Promise<Record<string, string>>;
 
@@ -57,6 +57,8 @@ export function SaveOwnedCategories(arg1:Record<string, string>):Promise<void>;
 export function SaveSquadConfig(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SaveWatchChannel(arg1:string):Promise<void>;
+
+export function SearchMentionTargets(arg1:string):Promise<Array<slack.MentionTarget>>;
 
 export function StartMonitoring():Promise<void>;
 

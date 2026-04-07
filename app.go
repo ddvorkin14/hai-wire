@@ -161,8 +161,8 @@ func (a *App) SaveConfidenceThreshold(threshold string) error {
 	return a.config.SetConfidenceThreshold(threshold)
 }
 
-// GetMentionGroups scans the watch channel for user group mentions and returns them.
-func (a *App) GetMentionGroups() ([]slackclient.MentionGroup, error) {
+// GetMentionGroups scans the watch channel for user group and user mentions and returns them.
+func (a *App) GetMentionGroups() ([]slackclient.MentionTarget, error) {
 	if a.slack == nil {
 		return nil, fmt.Errorf("Slack not connected")
 	}
@@ -170,7 +170,15 @@ func (a *App) GetMentionGroups() ([]slackclient.MentionGroup, error) {
 	if watchChannel == "" {
 		return nil, fmt.Errorf("Watch channel not configured")
 	}
-	return a.slack.ExtractMentionGroups(watchChannel)
+	return a.slack.ExtractMentionTargets(watchChannel)
+}
+
+// SearchMentionTargets searches for users by name.
+func (a *App) SearchMentionTargets(query string) ([]slackclient.MentionTarget, error) {
+	if a.slack == nil {
+		return nil, fmt.Errorf("Slack not connected")
+	}
+	return a.slack.SearchUsers(query)
 }
 
 // TestWatchChannel verifies we can read from the watch channel (no message sent).

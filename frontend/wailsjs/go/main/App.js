@@ -110,6 +110,10 @@ export function SaveWatchChannel(arg1) {
   return window['go']['main']['App']['SaveWatchChannel'](arg1);
 }
 
+export function SearchMentionTargets(arg1) {
+  return window['go']['main']['App']['SearchMentionTargets'](arg1);
+}
+
 export function StartMonitoring() {
   return window['go']['main']['App']['StartMonitoring']();
 }

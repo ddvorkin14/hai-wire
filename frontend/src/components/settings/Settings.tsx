@@ -3,13 +3,14 @@ import {
   GetAllConfig, GetOwnedCategories, GetAllCategories,
   SaveSquadConfig, SaveOwnedCategories, SaveConfidenceThreshold, SaveWatchChannel,
   SaveAnthropicKey, IsSlackConnected, GetSlackStatus, ReconnectSlack, TestWatchChannel, TestTriageChannel,
-  GetMentionGroups,
+  GetMentionGroups, SearchMentionTargets,
 } from '../../../wailsjs/go/main/App';
 import type { Category } from '../../types';
 
-interface MentionGroup {
+interface MentionTarget {
   id: string;
-  handle: string;
+  name: string;
+  type: string;
 }
 
 export function Settings() {
@@ -22,8 +23,10 @@ export function Settings() {
   const [dirty, setDirty] = useState(false);
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; msg: string }>>({});
   const [testing, setTesting] = useState<Record<string, boolean>>({});
-  const [mentionGroups, setMentionGroups] = useState<MentionGroup[]>([]);
-  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [mentionTargets, setMentionTargets] = useState<MentionTarget[]>([]);
+  const [loadingTargets, setLoadingTargets] = useState(false);
+  const [mentionSearch, setMentionSearch] = useState('');
+  const [selectedPingName, setSelectedPingName] = useState('');
 
   useEffect(() => {
     Promise.all([
@@ -100,13 +103,41 @@ export function Settings() {
     }
   };
 
-  const loadMentionGroups = async () => {
-    setLoadingGroups(true);
+  const loadChannelMentions = async () => {
+    setLoadingTargets(true);
     try {
-      const groups = await GetMentionGroups();
-      setMentionGroups(groups || []);
+      const targets = await GetMentionGroups();
+      setMentionTargets(targets || []);
     } catch {}
-    setLoadingGroups(false);
+    setLoadingTargets(false);
+  };
+
+  const searchMentions = async (query: string) => {
+    setMentionSearch(query);
+    if (query.length < 2) {
+      setMentionTargets([]);
+      return;
+    }
+    setLoadingTargets(true);
+    try {
+      // Search users + load channel groups in parallel
+      const [users, groups] = await Promise.all([
+        SearchMentionTargets(query).catch(() => []),
+        GetMentionGroups().catch(() => []),
+      ]);
+      const filtered = (groups || []).filter((g: MentionTarget) =>
+        g.name.toLowerCase().includes(query.toLowerCase())
+      );
+      setMentionTargets([...filtered, ...(users || [])]);
+    } catch {}
+    setLoadingTargets(false);
+  };
+
+  const selectTarget = (target: MentionTarget) => {
+    update('ping_group', target.id);
+    setSelectedPingName(`${target.name} (${target.type})`);
+    setMentionTargets([]);
+    setMentionSearch('');
   };
 
   const handleReconnectSlack = async () => {
@@ -177,28 +208,42 @@ export function Settings() {
                 className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400" />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">Ping Group</label>
-              <div className="flex gap-2">
-                {mentionGroups.length > 0 ? (
-                  <select value={config.ping_group || ''} onChange={(e) => update('ping_group', e.target.value)}
-                    className="flex-1 bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400 text-slate-300">
-                    <option value="">Select a group...</option>
-                    {mentionGroups.map((g) => (
-                      <option key={g.id} value={g.id}>{g.handle || g.id}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input value={config.ping_group || ''} onChange={(e) => update('ping_group', e.target.value)}
-                    placeholder="Group ID (e.g., S091P70JAP5)"
-                    className="flex-1 bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400" />
+              <label className="block text-xs text-slate-500 mb-1">Ping Target</label>
+              {config.ping_group && (
+                <div className="flex items-center gap-2 mb-2 bg-amber-400/10 border border-amber-400/30 rounded px-3 py-1.5">
+                  <span className="text-sm text-amber-400 flex-1">
+                    {selectedPingName || config.ping_group}
+                  </span>
+                  <button onClick={() => { update('ping_group', ''); setSelectedPingName(''); }}
+                    className="text-slate-500 hover:text-red-400 text-xs">Clear</button>
+                </div>
+              )}
+              <div className="relative">
+                <input
+                  value={mentionSearch}
+                  onChange={(e) => searchMentions(e.target.value)}
+                  placeholder="Search for a user or group..."
+                  className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400"
+                />
+                {loadingTargets && (
+                  <span className="absolute right-3 top-2.5 text-xs text-slate-500">Searching...</span>
                 )}
-                <button onClick={loadMentionGroups} disabled={loadingGroups || !slackConnected}
-                  className="bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-slate-300 text-xs px-3 py-2 rounded whitespace-nowrap">
-                  {loadingGroups ? 'Scanning...' : mentionGroups.length > 0 ? 'Refresh' : 'Find Groups'}
-                </button>
+                {mentionTargets.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-slate-700 border border-slate-600 rounded shadow-lg max-h-48 overflow-y-auto">
+                    {mentionTargets.map((t) => (
+                      <button key={t.id} onClick={() => selectTarget(t)}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-slate-600 flex items-center justify-between">
+                        <span className="text-slate-200">{t.name}</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${
+                          t.type === 'group' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'
+                        }`}>{t.type}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <p className="text-xs text-slate-600 mt-1">
-                Click "Find Groups" to scan the watch channel for user groups that are commonly tagged. Or enter a group ID manually (starts with S).
+                Type to search for a user or group to ping when requests are routed.
               </p>
             </div>
           </div>

@@ -3,6 +3,7 @@ package slack
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/slack-go/slack"
 )
@@ -142,19 +143,28 @@ func (c *Client) GetUserName(userID string) string {
 	return user.RealName
 }
 
-// ExtractMentionGroups scans recent messages in a channel for <!subteam^ID> patterns
-// and returns unique group IDs with their handles.
-func (c *Client) ExtractMentionGroups(channelID string) ([]MentionGroup, error) {
+type MentionTarget struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"` // "group" or "user"
+}
+
+// ExtractMentionTargets scans recent messages in a channel for <!subteam^ID> and <@USER_ID>
+// patterns, resolves names, and returns unique targets.
+func (c *Client) ExtractMentionTargets(channelID string) ([]MentionTarget, error) {
 	msgs, err := c.FetchNewMessages(channelID, "")
 	if err != nil {
 		return nil, err
 	}
 
-	seen := make(map[string]bool)
-	var groups []MentionGroup
+	seenGroups := make(map[string]bool)
+	seenUsers := make(map[string]bool)
+	var targets []MentionTarget
+
 	for _, msg := range msgs {
-		// Find all <!subteam^XXXXX> or <!subteam^XXXXX|@handle> patterns
 		text := msg.Text
+
+		// Extract <!subteam^ID> or <!subteam^ID|@handle>
 		for {
 			idx := indexOf(text, "<!subteam^")
 			if idx == -1 {
@@ -166,9 +176,8 @@ func (c *Client) ExtractMentionGroups(channelID string) ([]MentionGroup, error) 
 				break
 			}
 			id := rest[:endIdx]
-			if !seen[id] {
-				seen[id] = true
-				// Try to extract handle if present
+			if !seenGroups[id] {
+				seenGroups[id] = true
 				handle := ""
 				if endIdx < len(rest) && rest[endIdx] == '|' {
 					handleEnd := indexOf(rest[endIdx+1:], ">")
@@ -176,18 +185,89 @@ func (c *Client) ExtractMentionGroups(channelID string) ([]MentionGroup, error) 
 						handle = rest[endIdx+1 : endIdx+1+handleEnd]
 					}
 				}
-				groups = append(groups, MentionGroup{ID: id, Handle: handle})
+				name := handle
+				if name == "" {
+					name = id
+				}
+				// Clean up handle -- remove leading @
+				if len(name) > 0 && name[0] == '@' {
+					name = name[1:]
+				}
+				targets = append(targets, MentionTarget{ID: id, Name: name, Type: "group"})
+			}
+			text = rest[endIdx:]
+		}
+
+		// Extract <@USER_ID> or <@USER_ID|display_name>
+		text = msg.Text
+		for {
+			idx := indexOf(text, "<@")
+			if idx == -1 {
+				break
+			}
+			rest := text[idx+2:]
+			endIdx := indexOfAny(rest, ">|")
+			if endIdx == -1 {
+				break
+			}
+			id := rest[:endIdx]
+			if len(id) > 0 && id[0] == 'U' && !seenUsers[id] {
+				seenUsers[id] = true
+				// Try to get display name from the mention itself
+				name := ""
+				if endIdx < len(rest) && rest[endIdx] == '|' {
+					nameEnd := indexOf(rest[endIdx+1:], ">")
+					if nameEnd != -1 {
+						name = rest[endIdx+1 : endIdx+1+nameEnd]
+					}
+				}
+				// If no inline name, resolve via API
+				if name == "" {
+					name = c.GetUserName(id)
+				}
+				targets = append(targets, MentionTarget{ID: id, Name: name, Type: "user"})
 			}
 			text = rest[endIdx:]
 		}
 	}
-	return groups, nil
+	return targets, nil
 }
 
-type MentionGroup struct {
-	ID     string `json:"id"`
-	Handle string `json:"handle"`
+// SearchUsers searches for Slack users by name and returns them as mention targets.
+func (c *Client) SearchUsers(query string) ([]MentionTarget, error) {
+	// Use users.list with a client-side filter since search API needs different scopes
+	users, err := c.api.GetUsers()
+	if err != nil {
+		log.Printf("SearchUsers API error: %v", err)
+		return nil, nil
+	}
+
+	query = strings.ToLower(query)
+	var results []MentionTarget
+	for _, u := range users {
+		if u.Deleted || u.IsBot {
+			continue
+		}
+		name := u.Profile.DisplayName
+		if name == "" {
+			name = u.RealName
+		}
+		if name == "" {
+			continue
+		}
+		if strings.Contains(strings.ToLower(name), query) ||
+			strings.Contains(strings.ToLower(u.Name), query) {
+			results = append(results, MentionTarget{ID: u.ID, Name: name, Type: "user"})
+		}
+		if len(results) >= 20 {
+			break
+		}
+	}
+	return results, nil
 }
+
+// MentionGroup kept for backward compat with bindings
+type MentionGroup = MentionTarget
 
 func indexOf(s, substr string) int {
 	for i := 0; i <= len(s)-len(substr); i++ {
