@@ -51,9 +51,7 @@ function App() {
     );
   }
 
-  if (view === 'wizard') {
-    return <WizardLayout onComplete={() => { refreshStatus(); setView('feed'); }} />;
-  }
+  // Wizard is now shown inside the main layout, not full-screen
 
   return (
     <div className="h-screen bg-slate-900 text-slate-100 flex flex-col">
@@ -90,6 +88,7 @@ function App() {
         {view === 'feed' && <LiveFeed />}
         {view === 'settings' && <Settings />}
         {view === 'log' && <ActivityLog />}
+        {view === 'wizard' && <WizardLayout onComplete={() => { refreshStatus(); setView('feed'); }} />}
       </main>
     </div>
   );

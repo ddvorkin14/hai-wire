@@ -4,8 +4,6 @@ import {classifier} from '../models';
 import {db} from '../models';
 import {slack} from '../models';
 
-export function ConnectSlack():Promise<string>;
-
 export function GetAllCategories():Promise<Array<classifier.Category>>;
 
 export function GetAllConfig():Promise<Record<string, string>>;
@@ -14,7 +12,7 @@ export function GetOwnedCategories():Promise<Record<string, string>>;
 
 export function GetProcessedMessages(arg1:number):Promise<Array<db.ProcessedMessage>>;
 
-export function GetSlackAuthURL():Promise<string>;
+export function GetSlackStatus():Promise<Record<string, string>>;
 
 export function IsMonitoring():Promise<boolean>;
 
@@ -23,6 +21,8 @@ export function IsSetupComplete():Promise<boolean>;
 export function IsSlackConnected():Promise<boolean>;
 
 export function ListSlackChannels():Promise<Array<slack.ChannelInfo>>;
+
+export function ReconnectSlack():Promise<string>;
 
 export function SaveAnthropicKey(arg1:string):Promise<void>;
 

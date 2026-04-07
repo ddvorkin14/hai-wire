@@ -66,7 +66,7 @@ export function WizardLayout({ onComplete }: Props) {
 
   if (activeStep) {
     return (
-      <div className="h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center p-8">
+      <div className="h-full flex flex-col items-center justify-center p-8">
         <div className="w-full max-w-xl">
           <button onClick={() => setActiveStep(null)}
             className="text-slate-400 hover:text-white text-sm mb-4 flex items-center gap-1">
@@ -86,10 +86,10 @@ export function WizardLayout({ onComplete }: Props) {
   }
 
   return (
-    <div className="h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center p-8">
+    <div className="h-full flex flex-col items-center justify-center p-8">
       <div className="w-full max-w-2xl">
-        <h1 className="text-3xl font-bold text-amber-400 mb-2">HAI-Wire</h1>
-        <p className="text-slate-400 mb-6">Set up your squad. Complete these in any order.</p>
+        <h1 className="text-3xl font-bold text-amber-400 mb-2">Setup</h1>
+        <p className="text-slate-400 mb-6">Complete these in any order.</p>
 
         {/* Progress */}
         <div className="flex items-center gap-2 mb-6">

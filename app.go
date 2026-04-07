@@ -18,12 +18,11 @@ import (
 )
 
 type App struct {
-	ctx       context.Context
-	db        *db.DB
-	config    *config.Service
-	slack     *slackclient.MCPClient
-	dataDir   string
-	stopPoll  context.CancelFunc
+	ctx         context.Context
+	db          *db.DB
+	config      *config.Service
+	slack       *slackclient.Client
+	stopPoll    context.CancelFunc
 	pollRunning bool
 }
 
@@ -35,66 +34,90 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
 	homeDir, _ := os.UserHomeDir()
-	a.dataDir = filepath.Join(homeDir, ".hai-wire")
-	os.MkdirAll(a.dataDir, 0755)
+	dataDir := filepath.Join(homeDir, ".hai-wire")
+	os.MkdirAll(dataDir, 0755)
 
-	database, err := db.New(filepath.Join(a.dataDir, "hai-wire.db"))
+	database, err := db.New(filepath.Join(dataDir, "hai-wire.db"))
 	if err != nil {
 		runtime.LogFatalf(ctx, "failed to init db: %v", err)
 	}
 	a.db = database
 	a.config = config.NewService(database)
-	a.slack = slackclient.NewMCPClient(a.dataDir)
 
-	// Try to reconnect with saved token
-	if a.slack != nil {
-		go func() {
-			_ = a.slack.Reconnect(context.Background())
-		}()
-	}
+	// Try to connect Slack from keychain on startup
+	a.tryConnectSlack()
 }
 
 func (a *App) shutdown(ctx context.Context) {
 	if a.stopPoll != nil {
 		a.stopPoll()
 	}
-	if a.slack != nil {
-		a.slack.Close()
-	}
 	if a.db != nil {
 		a.db.Close()
 	}
 }
 
-// --- Slack connection ---
-
-// ConnectSlack opens the browser for Slack OAuth. Returns workspace name.
-func (a *App) ConnectSlack() (string, error) {
-	log.Printf("ConnectSlack: starting OAuth flow...")
-	teamName, err := a.slack.Connect(a.ctx)
+func (a *App) tryConnectSlack() {
+	client, err := slackclient.NewClientFromKeychain()
 	if err != nil {
-		log.Printf("ConnectSlack error: %v", err)
-		return "", fmt.Errorf("Slack connection failed: %v", err)
+		log.Printf("Slack not available: %v", err)
+		return
 	}
-	log.Printf("ConnectSlack: connected to %s", teamName)
+	teamName, err := client.ValidateConnection()
+	if err != nil {
+		log.Printf("Slack token invalid: %v", err)
+		return
+	}
+	a.slack = client
+	a.config.SetSlackConnected("true")
+	log.Printf("Slack connected to %s", teamName)
+}
+
+// --- Slack ---
+
+func (a *App) IsSlackConnected() bool {
+	return a.slack != nil
+}
+
+func (a *App) GetSlackStatus() map[string]string {
+	if a.slack == nil {
+		return map[string]string{
+			"connected": "false",
+			"message":   "Connect Slack MCP in Claude Code first (/mcp), then restart HAI-Wire.",
+		}
+	}
+	teamName, _ := a.slack.ValidateConnection()
+	return map[string]string{
+		"connected": "true",
+		"team":      teamName,
+	}
+}
+
+func (a *App) ReconnectSlack() (string, error) {
+	client, err := slackclient.NewClientFromKeychain()
+	if err != nil {
+		return "", err
+	}
+	teamName, err := client.ValidateConnection()
+	if err != nil {
+		return "", err
+	}
+	a.slack = client
 	a.config.SetSlackConnected("true")
 	return teamName, nil
 }
 
-// IsSlackConnected checks if we have a valid Slack connection.
-func (a *App) IsSlackConnected() bool {
-	return a.slack.IsConnected()
+func (a *App) ListSlackChannels() ([]slackclient.ChannelInfo, error) {
+	if a.slack == nil {
+		return nil, fmt.Errorf("Slack not connected")
+	}
+	return a.slack.ListChannels()
 }
 
-// GetSlackAuthURL returns the last OAuth URL for manual copy-paste.
-func (a *App) GetSlackAuthURL() string {
-	return a.slack.GetLastAuthURL()
-}
-
-// --- Config bindings ---
+// --- Config ---
 
 func (a *App) IsSetupComplete() bool {
-	return a.config.IsSetupComplete()
+	return a.config.IsSetupComplete() && a.slack != nil
 }
 
 func (a *App) GetAllConfig() (map[string]string, error) {
@@ -131,48 +154,37 @@ func (a *App) SaveConfidenceThreshold(threshold string) error {
 	return a.config.SetConfidenceThreshold(threshold)
 }
 
-// --- Slack channel bindings ---
-
-func (a *App) ListSlackChannels() ([]slackclient.ChannelInfo, error) {
-	if !a.slack.IsConnected() {
-		return nil, nil
-	}
-	return a.slack.ListChannels(a.ctx)
-}
-
-// --- Category bindings ---
+// --- Categories ---
 
 func (a *App) GetAllCategories() []classifier.Category {
 	return classifier.AllCategories
 }
 
-// --- Monitoring bindings ---
+// --- Monitoring ---
 
 func (a *App) StartMonitoring() error {
 	if a.pollRunning {
 		return nil
 	}
-
-	if !a.slack.IsConnected() {
+	if a.slack == nil {
 		return fmt.Errorf("Slack not connected")
 	}
 
 	apiKey, _ := a.config.GetAnthropicKey()
-	cls := classifier.NewClassifier(apiKey)
+	if apiKey == "" {
+		return fmt.Errorf("Anthropic API key not set")
+	}
 
 	watchChannel, _ := a.config.GetWatchChannelID()
-	triageChannel, _ := a.config.GetTriageChannelID()
-	pingGroup, _ := a.config.GetPingGroup()
-	thresholdStr, _ := a.config.GetConfidenceThreshold()
-
-	ownedCats, _ := a.db.GetOwnedCategories()
+	if watchChannel == "" {
+		return fmt.Errorf("Watch channel not set")
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	a.stopPoll = cancel
 	a.pollRunning = true
 
-	go pollLoop(ctx, a, cls, watchChannel, triageChannel, pingGroup, thresholdStr, ownedCats)
-
+	go a.pollLoop(ctx)
 	return nil
 }
 
@@ -187,65 +199,76 @@ func (a *App) IsMonitoring() bool {
 	return a.pollRunning
 }
 
-// --- Activity log bindings ---
+// --- Activity Log ---
 
 func (a *App) GetProcessedMessages(limit int) ([]db.ProcessedMessage, error) {
 	return a.db.GetProcessedMessages(limit)
 }
 
-// --- Poll loop ---
+// --- Poll Loop ---
 
-func pollLoop(ctx context.Context, a *App, cls *classifier.Classifier, watchChannel, triageChannel, pingGroup, thresholdStr string, ownedCats map[string]string) {
-	lastTS := fmt.Sprintf("%d.000000", time.Now().Unix())
+func (a *App) pollLoop(ctx context.Context) {
+	apiKey, _ := a.config.GetAnthropicKey()
+	cls := classifier.NewClassifier(apiKey)
+	watchChannel, _ := a.config.GetWatchChannelID()
+	triageChannel, _ := a.config.GetTriageChannelID()
+	pingGroup, _ := a.config.GetPingGroup()
+	thresholdStr, _ := a.config.GetConfidenceThreshold()
+	ownedCats, _ := a.db.GetOwnedCategories()
+
 	threshold, _ := strconv.ParseFloat(thresholdStr, 64)
 	if threshold == 0 {
 		threshold = 0.5
 	}
 
+	lastTS := fmt.Sprintf("%d.000000", time.Now().Unix())
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
+
+	log.Printf("Monitoring started: channel=%s, threshold=%.0f%%", watchChannel, threshold*100)
 
 	for {
 		select {
 		case <-ctx.Done():
 			a.pollRunning = false
+			log.Printf("Monitoring stopped")
 			return
 		case <-ticker.C:
-			raw, err := a.slack.ReadChannel(ctx, watchChannel, 20, lastTS)
+			messages, err := a.slack.FetchNewMessages(watchChannel, lastTS)
 			if err != nil {
 				log.Printf("poll error: %v", err)
 				continue
 			}
 
-			// Parse messages from MCP response and classify
-			// MCP returns markdown-formatted text, we process each message block
-			messages := parseSlackMessages(raw)
 			for _, msg := range messages {
-				if msg.ts <= lastTS {
+				// Skip bots, thread replies, subtypes, empty
+				if msg.BotID != "" || msg.ThreadTimestamp != "" || msg.SubType != "" || msg.Text == "" {
 					continue
 				}
-				if msg.ts > lastTS {
-					lastTS = msg.ts
+				if msg.Timestamp <= lastTS {
+					continue
 				}
+				lastTS = msg.Timestamp
 
-				processed, _ := a.db.IsMessageProcessed(msg.ts)
+				processed, _ := a.db.IsMessageProcessed(msg.Timestamp)
 				if processed {
 					continue
 				}
 
-				result, err := cls.Classify(ctx, msg.text)
+				result, err := cls.Classify(ctx, msg.Text)
 				if err != nil {
 					log.Printf("classify error: %v", err)
 					continue
 				}
 
+				authorName := a.slack.GetUserName(msg.User)
 				_, owned := ownedCats[result.Category]
 				routed := owned && result.Confidence >= threshold
 
 				dbMsg := db.ProcessedMessage{
-					MessageTS:  msg.ts,
+					MessageTS:  msg.Timestamp,
 					ChannelID:  watchChannel,
-					Author:     msg.author,
+					Author:     authorName,
 					Category:   result.Category,
 					Confidence: result.Confidence,
 					Summary:    result.Summary,
@@ -263,15 +286,16 @@ func pollLoop(ctx context.Context, a *App, cls *classifier.Classifier, watchChan
 					} else if pct < 50 {
 						emoji = "🔴"
 					}
-
-					triageMsg := fmt.Sprintf("%s *[Confidence: %d%%] %s*\n\n*Summary:* %s\n\n*Posted by:* %s\n\n%s",
-						emoji, pct, catName, result.Summary, msg.author, pingGroup)
-					a.slack.SendMessage(ctx, triageChannel, triageMsg)
+					permalink := a.slack.GetPermalink(watchChannel, msg.Timestamp)
+					triageMsg := fmt.Sprintf("%s *[Confidence: %d%%] %s*\n\n*Summary:* %s\n\n*Original post:* %s\n*Posted by:* %s\n\n%s",
+						emoji, pct, catName, result.Summary, permalink, authorName, pingGroup)
+					a.slack.PostToChannel(triageChannel, triageMsg)
+					a.slack.ReplyInThread(watchChannel, msg.Timestamp, "This support request has been analyzed and the appropriate team has been notified.")
 				}
 
 				runtime.EventsEmit(a.ctx, "triage:event", map[string]interface{}{
-					"message_ts": msg.ts,
-					"author":     msg.author,
+					"message_ts": msg.Timestamp,
+					"author":     authorName,
 					"category":   result.Category,
 					"confidence": result.Confidence,
 					"summary":    result.Summary,
@@ -280,74 +304,4 @@ func pollLoop(ctx context.Context, a *App, cls *classifier.Classifier, watchChan
 			}
 		}
 	}
-}
-
-type slackMsg struct {
-	ts     string
-	author string
-	text   string
-}
-
-// parseSlackMessages extracts message data from MCP markdown response.
-func parseSlackMessages(raw string) []slackMsg {
-	// MCP returns formatted markdown. We need to extract individual messages.
-	// Format: "=== Message from Author (UserID) at Date ===" followed by content
-	var messages []slackMsg
-	lines := splitLines(raw)
-	var current *slackMsg
-
-	for _, line := range lines {
-		if len(line) > 20 && line[:4] == "=== " {
-			if current != nil && current.text != "" {
-				messages = append(messages, *current)
-			}
-			current = &slackMsg{}
-			// Extract author from "=== Message from Author (UserID) at Date ==="
-			current.author = extractAuthor(line)
-		} else if len(line) > 12 && line[:12] == "Message TS: " {
-			if current != nil {
-				current.ts = line[12:]
-			}
-		} else if current != nil {
-			if current.text != "" {
-				current.text += "\n"
-			}
-			current.text += line
-		}
-	}
-	if current != nil && current.text != "" {
-		messages = append(messages, *current)
-	}
-	return messages
-}
-
-func splitLines(s string) []string {
-	var lines []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			lines = append(lines, s[start:i])
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		lines = append(lines, s[start:])
-	}
-	return lines
-}
-
-func extractAuthor(line string) string {
-	// "=== Message from Author Name (UserID) at 2026-... ==="
-	const prefix = "=== Message from "
-	if len(line) < len(prefix) {
-		return "Unknown"
-	}
-	rest := line[len(prefix):]
-	// Find the " (" before UserID
-	for i := 0; i < len(rest); i++ {
-		if i+1 < len(rest) && rest[i] == '(' && rest[i-1] == ' ' {
-			return rest[:i-1]
-		}
-	}
-	return "Unknown"
 }
