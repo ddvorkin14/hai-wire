@@ -173,22 +173,77 @@ Posted by: Jane Doe
 
 ## Slack App Setup
 
-Your Slack app needs the following configuration:
+HAI-Wire needs two tokens from a Slack app: a **Bot Token** (`xoxb-...`) and an **App Token** (`xapp-...`). Here's how to get both.
 
-### Required Scopes (Bot Token)
+### Option A: Use an existing Slack app
 
-| Scope | Purpose |
-|-------|---------|
-| `channels:history` | Read messages in public channels |
-| `channels:read` | List channels for the config UI |
-| `chat:write` | Post thread replies and triage messages |
-| `users:read` | Resolve user display names |
+If you already have a Slack app, you just need to make sure it has the right scopes and Socket Mode enabled. Skip to [Add Required Scopes](#2-add-required-scopes).
 
-### Socket Mode
+### Option B: Create a new Slack app
 
-1. Go to your app settings > **Socket Mode** > Enable
-2. Generate an **App-Level Token** with `connections:write` scope
-3. Go to **Event Subscriptions** > Subscribe to `message.channels`
+#### 1. Create the app
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps)
+2. Click **Create New App** > **From scratch**
+3. Name it something like `HAI-Wire` and select your workspace
+4. Click **Create App**
+
+#### 2. Add required scopes
+
+1. In the left sidebar, click **OAuth & Permissions**
+2. Scroll down to **Scopes** > **Bot Token Scopes**
+3. Click **Add an OAuth Scope** and add each of these:
+
+| Scope | What it does |
+|-------|-------------|
+| `channels:history` | Lets the bot read messages in channels it's added to |
+| `channels:read` | Lets the bot list channels (for the setup wizard dropdown) |
+| `chat:write` | Lets the bot post thread replies and triage messages |
+| `users:read` | Lets the bot look up who posted a message |
+
+#### 3. Install the app to your workspace
+
+1. Still on **OAuth & Permissions**, scroll up and click **Install to Workspace**
+2. Click **Allow** on the permissions screen
+3. Copy the **Bot User OAuth Token** -- this is your `xoxb-...` token
+
+> This is the first token HAI-Wire asks for in the setup wizard.
+
+#### 4. Enable Socket Mode
+
+1. In the left sidebar, click **Socket Mode**
+2. Toggle **Enable Socket Mode** to on
+3. You'll be prompted to create an **App-Level Token**
+   - Name it anything (e.g., `hai-wire-socket`)
+   - Add the `connections:write` scope
+   - Click **Generate**
+4. Copy the token -- this is your `xapp-...` token
+
+> This is the second token HAI-Wire asks for in the setup wizard.
+
+#### 5. Subscribe to message events
+
+1. In the left sidebar, click **Event Subscriptions**
+2. Toggle **Enable Events** to on
+3. Under **Subscribe to bot events**, click **Add Bot User Event**
+4. Add `message.channels`
+5. Click **Save Changes**
+
+#### 6. Add the bot to your channel
+
+The bot can only see messages in channels it's been added to.
+
+1. Go to the Slack channel you want to monitor (e.g., `#test-hai-support`)
+2. Type `/invite @HAI-Wire` (or whatever you named your app)
+
+That's it -- you now have both tokens and the bot is ready to receive messages.
+
+### Where to find your tokens later
+
+| Token | Where to find it |
+|-------|-----------------|
+| Bot Token (`xoxb-...`) | [api.slack.com/apps](https://api.slack.com/apps) > Your App > **OAuth & Permissions** > **Bot User OAuth Token** |
+| App Token (`xapp-...`) | [api.slack.com/apps](https://api.slack.com/apps) > Your App > **Basic Information** > scroll to **App-Level Tokens** |
 
 ---
 
