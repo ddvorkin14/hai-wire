@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import {
   GetAllConfig, GetOwnedCategories, GetAllCategories,
   SaveSquadConfig, SaveOwnedCategories, SaveConfidenceThreshold, SaveWatchChannel,
-  SaveAnthropicKey, IsSlackConnected, GetSlackStatus, ReconnectSlack, TestWatchChannel, TestTriageChannel,
+  SaveAnthropicKey, IsSlackConnected, GetSlackStatus, ReconnectSlack,
+  TestWatchChannel, TestTriageChannel,
 } from '../../../wailsjs/go/main/App';
 import { PingTargetPicker } from './PingTargetPicker';
 import type { Category } from '../../types';
@@ -165,10 +166,10 @@ export function Settings() {
               <label className="block text-xs text-slate-500 mb-1">Ping Target</label>
               <PingTargetPicker
                 value={config.ping_group || ''}
-                onChange={(id, name) => { update('ping_group', id); }}
+                onChange={(val) => update('ping_group', val)}
               />
               <p className="text-xs text-slate-600 mt-1">
-                Search users and groups mentioned in your watch channel.
+                Enter a Slack handle (e.g., <code className="text-slate-500">hai-conversion-on-call</code>) or a group/user ID (e.g., <code className="text-slate-500">S091P70JAP5</code>) for clickable mentions.
               </p>
             </div>
           </div>
