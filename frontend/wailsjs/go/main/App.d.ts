@@ -4,11 +4,19 @@ import {classifier} from '../models';
 import {db} from '../models';
 import {slack} from '../models';
 
+export function ApproveMessage(arg1:string):Promise<void>;
+
+export function DeleteAutoApprovalRule(arg1:number):Promise<void>;
+
 export function GetAllCategories():Promise<Array<classifier.Category>>;
 
 export function GetAllConfig():Promise<Record<string, string>>;
 
+export function GetAutoApprovalRules():Promise<Array<db.AutoApprovalRule>>;
+
 export function GetOwnedCategories():Promise<Record<string, string>>;
+
+export function GetPendingMessages():Promise<Array<db.ProcessedMessage>>;
 
 export function GetProcessedMessages(arg1:number):Promise<Array<db.ProcessedMessage>>;
 
@@ -24,7 +32,11 @@ export function ListSlackChannels():Promise<Array<slack.ChannelInfo>>;
 
 export function ReconnectSlack():Promise<string>;
 
+export function RejectMessage(arg1:string):Promise<void>;
+
 export function SaveAnthropicKey(arg1:string):Promise<void>;
+
+export function SaveAutoApprovalRule(arg1:string,arg2:number,arg3:boolean):Promise<void>;
 
 export function SaveConfidenceThreshold(arg1:string):Promise<void>;
 

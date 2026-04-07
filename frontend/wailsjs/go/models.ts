@@ -21,6 +21,24 @@ export namespace classifier {
 
 export namespace db {
 	
+	export class AutoApprovalRule {
+	    ID: number;
+	    CategoryKey: string;
+	    MinConfidence: number;
+	    Enabled: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AutoApprovalRule(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ID = source["ID"];
+	        this.CategoryKey = source["CategoryKey"];
+	        this.MinConfidence = source["MinConfidence"];
+	        this.Enabled = source["Enabled"];
+	    }
+	}
 	export class ProcessedMessage {
 	    ID: number;
 	    MessageTS: string;
@@ -31,6 +49,7 @@ export namespace db {
 	    Summary: string;
 	    Reasoning: string;
 	    Routed: boolean;
+	    Status: string;
 	    // Go type: time
 	    CreatedAt: any;
 	
@@ -49,6 +68,7 @@ export namespace db {
 	        this.Summary = source["Summary"];
 	        this.Reasoning = source["Reasoning"];
 	        this.Routed = source["Routed"];
+	        this.Status = source["Status"];
 	        this.CreatedAt = this.convertValues(source["CreatedAt"], null);
 	    }
 	

@@ -230,6 +230,81 @@ func (a *App) IsMonitoring() bool {
 	return a.pollRunning
 }
 
+// --- Review Queue ---
+
+func (a *App) GetPendingMessages() ([]db.ProcessedMessage, error) {
+	return a.db.GetPendingMessages()
+}
+
+func (a *App) ApproveMessage(messageTS string) error {
+	if a.slack == nil {
+		return fmt.Errorf("Slack not connected")
+	}
+
+	// Get the message details
+	msgs, _ := a.db.GetProcessedMessages(500)
+	var msg *db.ProcessedMessage
+	for _, m := range msgs {
+		if m.MessageTS == messageTS {
+			msg = &m
+			break
+		}
+	}
+	if msg == nil {
+		return fmt.Errorf("message not found")
+	}
+
+	// Route it
+	triageChannel, _ := a.config.GetTriageChannelID()
+	pingGroup, _ := a.config.GetPingGroup()
+	watchChannel, _ := a.config.GetWatchChannelID()
+	ownedCats, _ := a.db.GetOwnedCategories()
+	catName := ownedCats[msg.Category]
+	if catName == "" {
+		catName = msg.Category
+	}
+
+	pct := int(msg.Confidence * 100)
+	emoji := "🟡"
+	if pct >= 80 {
+		emoji = "🟢"
+	} else if pct < 50 {
+		emoji = "🔴"
+	}
+	permalink := a.slack.GetPermalink(watchChannel, msg.MessageTS)
+	triageMsg := fmt.Sprintf("%s *[Confidence: %d%%] %s*\n\n*Summary:* %s\n\n*Original post:* %s\n*Posted by:* %s\n\n%s",
+		emoji, pct, catName, msg.Summary, permalink, msg.Author, pingGroup)
+
+	if err := a.slack.PostToChannel(triageChannel, triageMsg); err != nil {
+		return fmt.Errorf("post to triage: %v", err)
+	}
+	a.slack.ReplyInThread(watchChannel, msg.MessageTS, "This support request has been analyzed and the appropriate team has been notified.")
+
+	return a.db.SetMessageRouted(messageTS)
+}
+
+func (a *App) RejectMessage(messageTS string) error {
+	return a.db.UpdateMessageStatus(messageTS, "rejected")
+}
+
+// --- Auto-approval rules ---
+
+func (a *App) GetAutoApprovalRules() ([]db.AutoApprovalRule, error) {
+	return a.db.GetAutoApprovalRules()
+}
+
+func (a *App) SaveAutoApprovalRule(categoryKey string, minConfidence float64, enabled bool) error {
+	return a.db.SaveAutoApprovalRule(db.AutoApprovalRule{
+		CategoryKey:   categoryKey,
+		MinConfidence: minConfidence,
+		Enabled:       enabled,
+	})
+}
+
+func (a *App) DeleteAutoApprovalRule(id int64) error {
+	return a.db.DeleteAutoApprovalRule(id)
+}
+
 // --- Activity Log ---
 
 func (a *App) GetProcessedMessages(limit int) ([]db.ProcessedMessage, error) {
@@ -323,7 +398,20 @@ func (a *App) processMessage(ctx context.Context, cls *classifier.Classifier, ts
 
 	authorName := a.slack.GetUserName(userID)
 	_, owned := ownedCats[result.Category]
-	routed := owned && result.Confidence >= threshold
+	matchesSquad := owned && result.Confidence >= threshold
+
+	// Determine status: auto-approve if rules match, otherwise queue for review
+	status := "classified"
+	routed := false
+	if matchesSquad {
+		autoApproved, _ := a.db.CheckAutoApproval(result.Category, result.Confidence)
+		if autoApproved {
+			status = "approved"
+			routed = true
+		} else {
+			status = "pending"
+		}
+	}
 
 	dbMsg := db.ProcessedMessage{
 		MessageTS:  ts,
@@ -334,9 +422,11 @@ func (a *App) processMessage(ctx context.Context, cls *classifier.Classifier, ts
 		Summary:    result.Summary,
 		Reasoning:  result.Reasoning,
 		Routed:     routed,
+		Status:     status,
 	}
 	a.db.SaveProcessedMessage(dbMsg)
 
+	// If auto-approved, route immediately
 	if routed {
 		catName := ownedCats[result.Category]
 		pct := int(result.Confidence * 100)
@@ -361,5 +451,6 @@ func (a *App) processMessage(ctx context.Context, cls *classifier.Classifier, ts
 		"summary":    result.Summary,
 		"reasoning":  result.Reasoning,
 		"routed":     routed,
+		"status":     status,
 	})
 }

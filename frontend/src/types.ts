@@ -30,6 +30,14 @@ export interface TriageEvent {
   summary: string;
   reasoning?: string;
   routed: boolean;
+  status?: string;
 }
 
-export type View = 'wizard' | 'feed' | 'settings' | 'log';
+export interface AutoApprovalRule {
+  ID: number;
+  CategoryKey: string;
+  MinConfidence: number;
+  Enabled: boolean;
+}
+
+export type View = 'wizard' | 'feed' | 'queue' | 'settings' | 'log';
