@@ -34,6 +34,8 @@ export function IsSlackConnected():Promise<boolean>;
 
 export function ListSlackChannels():Promise<Array<slack.ChannelInfo>>;
 
+export function QueueMessage(arg1:string):Promise<void>;
+
 export function ReconnectSlack():Promise<string>;
 
 export function RejectMessage(arg1:string):Promise<void>;

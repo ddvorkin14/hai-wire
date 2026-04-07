@@ -273,6 +273,11 @@ func (a *App) IsMonitoring() bool {
 	return a.pollRunning
 }
 
+// QueueMessage sends a classified message to the review queue.
+func (a *App) QueueMessage(messageTS string) error {
+	return a.db.UpdateMessageStatus(messageTS, "pending")
+}
+
 // --- Review Queue ---
 
 func (a *App) GetPendingMessages() ([]db.ProcessedMessage, error) {

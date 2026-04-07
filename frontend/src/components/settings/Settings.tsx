@@ -160,10 +160,13 @@ export function Settings() {
                 className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400" />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">Ping Group</label>
+              <label className="block text-xs text-slate-500 mb-1">Ping Group Handle</label>
               <input value={config.ping_group || ''} onChange={(e) => update('ping_group', e.target.value)}
                 placeholder="e.g., @hai-conversion-on-call"
                 className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400" />
+              <p className="text-xs text-slate-600 mt-1">
+                The Slack user group handle to ping. Find it in Slack: type @ and search for your group.
+              </p>
             </div>
           </div>
         </section>

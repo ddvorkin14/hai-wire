@@ -62,6 +62,10 @@ export function ListSlackChannels() {
   return window['go']['main']['App']['ListSlackChannels']();
 }
 
+export function QueueMessage(arg1) {
+  return window['go']['main']['App']['QueueMessage'](arg1);
+}
+
 export function ReconnectSlack() {
   return window['go']['main']['App']['ReconnectSlack']();
 }
