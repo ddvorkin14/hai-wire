@@ -335,6 +335,7 @@ func (a *App) processMessage(ctx context.Context, cls *classifier.Classifier, ts
 		"category":   result.Category,
 		"confidence": result.Confidence,
 		"summary":    result.Summary,
+		"reasoning":  result.Reasoning,
 		"routed":     routed,
 	})
 }

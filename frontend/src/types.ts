@@ -28,6 +28,7 @@ export interface TriageEvent {
   category: string;
   confidence: number;
   summary: string;
+  reasoning?: string;
   routed: boolean;
 }
 
