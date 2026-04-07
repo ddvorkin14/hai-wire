@@ -6,7 +6,7 @@ import (
 )
 
 func TestBuildSystemPrompt_ContainsAllCategories(t *testing.T) {
-	prompt := buildSystemPrompt()
+	prompt := buildSystemPromptFromCategories(AllCategories)
 	for _, cat := range AllCategories {
 		if !strings.Contains(prompt, cat.Key) {
 			t.Errorf("system prompt missing category key: %s", cat.Key)

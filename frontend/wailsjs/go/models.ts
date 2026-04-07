@@ -16,6 +16,22 @@ export namespace classifier {
 	        this.Description = source["Description"];
 	    }
 	}
+	export class ExtractedCategory {
+	    key: string;
+	    name: string;
+	    description: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExtractedCategory(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	    }
+	}
 
 }
 

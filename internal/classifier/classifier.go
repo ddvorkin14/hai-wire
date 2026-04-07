@@ -18,7 +18,8 @@ type ClassificationResult struct {
 }
 
 type Classifier struct {
-	client anthropic.Client
+	client           anthropic.Client
+	customCategories []Category
 }
 
 func NewClassifier(apiKey string) *Classifier {
@@ -26,8 +27,20 @@ func NewClassifier(apiKey string) *Classifier {
 	return &Classifier{client: client}
 }
 
+// SetCustomCategories overrides the default categories with custom ones.
+func (c *Classifier) SetCustomCategories(cats []Category) {
+	c.customCategories = cats
+}
+
+func (c *Classifier) getCategories() []Category {
+	if len(c.customCategories) > 0 {
+		return c.customCategories
+	}
+	return AllCategories
+}
+
 func (c *Classifier) Classify(ctx context.Context, messageText string) (*ClassificationResult, error) {
-	systemPrompt := buildSystemPrompt()
+	systemPrompt := buildSystemPromptFromCategories(c.getCategories())
 
 	msg, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.ModelClaudeSonnet4_5,
@@ -53,15 +66,15 @@ func (c *Classifier) Classify(ctx context.Context, messageText string) (*Classif
 	return nil, fmt.Errorf("no text content in response")
 }
 
-func buildSystemPrompt() string {
+func buildSystemPromptFromCategories(categories []Category) string {
 	var sb strings.Builder
-	sb.WriteString(`You are a support request triage classifier for HandshakeAI (HAI).
+	sb.WriteString(`You are a support request triage classifier.
 
-You will receive a support request posted in #hai-support. Classify it into exactly one of the following categories and provide a confidence score.
+You will receive a support request. Classify it into exactly one of the following categories and provide a confidence score.
 
 Categories:
 `)
-	for _, cat := range AllCategories {
+	for _, cat := range categories {
 		sb.WriteString(fmt.Sprintf("- %s (%s): %s\n", cat.Key, cat.Name, cat.Description))
 	}
 

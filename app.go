@@ -187,8 +187,51 @@ func (a *App) TestTriageChannel(channelID string) (string, error) {
 
 // --- Categories ---
 
+// GetAllCategories returns custom categories if set, otherwise defaults.
 func (a *App) GetAllCategories() []classifier.Category {
+	if a.db.HasCustomCategories() {
+		custom, err := a.db.GetCustomCategories()
+		if err == nil && len(custom) > 0 {
+			cats := make([]classifier.Category, len(custom))
+			for i, c := range custom {
+				cats[i] = classifier.Category{Key: c.Key, Name: c.Name, Description: c.Description}
+			}
+			return cats
+		}
+	}
 	return classifier.AllCategories
+}
+
+// AnalyzeDocument sends document text to Claude and extracts categories from it.
+func (a *App) AnalyzeDocument(documentText string) ([]classifier.ExtractedCategory, error) {
+	apiKey, _ := a.config.GetAnthropicKey()
+	if apiKey == "" {
+		return nil, fmt.Errorf("Anthropic API key not set -- configure it in Settings first")
+	}
+	return classifier.ExtractCategoriesFromDocument(a.ctx, apiKey, documentText)
+}
+
+// SaveCustomCategories saves extracted categories as the active category set.
+func (a *App) SaveCustomCategories(categories []map[string]string) error {
+	var cats []db.CustomCategory
+	for _, c := range categories {
+		cats = append(cats, db.CustomCategory{
+			Key:         c["key"],
+			Name:        c["name"],
+			Description: c["description"],
+		})
+	}
+	return a.db.SetCustomCategories(cats)
+}
+
+// ResetToDefaultCategories removes custom categories, reverting to the built-in set.
+func (a *App) ResetToDefaultCategories() error {
+	return a.db.SetCustomCategories(nil)
+}
+
+// HasCustomCategories returns whether custom categories are configured.
+func (a *App) HasCustomCategories() bool {
+	return a.db.HasCustomCategories()
 }
 
 // --- Monitoring ---
@@ -316,6 +359,19 @@ func (a *App) GetProcessedMessages(limit int) ([]db.ProcessedMessage, error) {
 func (a *App) pollLoop(ctx context.Context) {
 	apiKey, _ := a.config.GetAnthropicKey()
 	cls := classifier.NewClassifier(apiKey)
+
+	// Load custom categories if available
+	if a.db.HasCustomCategories() {
+		custom, err := a.db.GetCustomCategories()
+		if err == nil && len(custom) > 0 {
+			cats := make([]classifier.Category, len(custom))
+			for i, c := range custom {
+				cats[i] = classifier.Category{Key: c.Key, Name: c.Name, Description: c.Description}
+			}
+			cls.SetCustomCategories(cats)
+		}
+	}
+
 	watchChannel, _ := a.config.GetWatchChannelID()
 	triageChannel, _ := a.config.GetTriageChannelID()
 	pingGroup, _ := a.config.GetPingGroup()

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { GetAllConfig, GetOwnedCategories, IsSlackConnected } from '../../../wailsjs/go/main/App';
+import { GetAllConfig, GetOwnedCategories, IsSlackConnected, HasCustomCategories } from '../../../wailsjs/go/main/App';
 import { StepSlack } from './StepSlack';
 import { StepClaude } from './StepClaude';
 import { StepChannel } from './StepChannel';
 import { StepSquad } from './StepSquad';
+import { StepDocument } from './StepDocument';
 import { StepCategories } from './StepCategories';
 import { StepConfidence } from './StepConfidence';
 
@@ -16,6 +17,7 @@ interface StepStatus {
   claude: boolean;
   channel: boolean;
   squad: boolean;
+  document: boolean;
   categories: boolean;
   confidence: boolean;
 }
@@ -27,7 +29,8 @@ const STEPS: { key: StepKey; label: string; description: string }[] = [
   { key: 'claude', label: 'Claude API', description: 'Add your Anthropic key' },
   { key: 'channel', label: 'Watch Channel', description: 'Pick channel to monitor' },
   { key: 'squad', label: 'Squad Setup', description: 'Name, ping group, triage channel' },
-  { key: 'categories', label: 'Categories', description: 'Choose issue types you own' },
+  { key: 'document', label: 'Runbook', description: 'Upload doc to generate categories' },
+  { key: 'categories', label: 'My Categories', description: 'Choose which ones you own' },
   { key: 'confidence', label: 'Confidence', description: 'Set routing threshold' },
 ];
 
@@ -35,20 +38,22 @@ export function WizardLayout({ onComplete }: Props) {
   const [activeStep, setActiveStep] = useState<StepKey | null>(null);
   const [status, setStatus] = useState<StepStatus>({
     slack: false, claude: false, channel: false,
-    squad: false, categories: false, confidence: false,
+    squad: false, document: false, categories: false, confidence: false,
   });
 
   const refreshStatus = async () => {
-    const [config, cats, slackConnected] = await Promise.all([
+    const [config, cats, slackConnected, hasCustomCats] = await Promise.all([
       GetAllConfig(),
       GetOwnedCategories(),
       IsSlackConnected().catch(() => false),
+      HasCustomCategories().catch(() => false),
     ]);
     setStatus({
       slack: slackConnected as boolean,
       claude: !!config.anthropic_key,
       channel: !!config.watch_channel_id,
       squad: !!config.squad_name && !!config.ping_group && !!config.triage_channel_id,
+      document: hasCustomCats as boolean,
       categories: Object.keys(cats || {}).length > 0,
       confidence: !!config.confidence_threshold,
     });
@@ -77,6 +82,7 @@ export function WizardLayout({ onComplete }: Props) {
             {activeStep === 'claude' && <StepClaude onNext={handleStepDone} onBack={() => setActiveStep(null)} />}
             {activeStep === 'channel' && <StepChannel onNext={handleStepDone} onBack={() => setActiveStep(null)} />}
             {activeStep === 'squad' && <StepSquad onNext={handleStepDone} onBack={() => setActiveStep(null)} />}
+            {activeStep === 'document' && <StepDocument onNext={handleStepDone} onBack={() => setActiveStep(null)} />}
             {activeStep === 'categories' && <StepCategories onNext={handleStepDone} onBack={() => setActiveStep(null)} />}
             {activeStep === 'confidence' && <StepConfidence onNext={handleStepDone} onBack={() => setActiveStep(null)} />}
           </div>

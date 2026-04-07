@@ -77,6 +77,12 @@ func (d *DB) migrate() error {
 	CREATE INDEX IF NOT EXISTS idx_processed_messages_ts ON processed_messages(message_ts);
 	CREATE INDEX IF NOT EXISTS idx_processed_messages_created ON processed_messages(created_at);
 	CREATE INDEX IF NOT EXISTS idx_processed_messages_status ON processed_messages(status);
+	CREATE TABLE IF NOT EXISTS custom_categories (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		key         TEXT NOT NULL UNIQUE,
+		name        TEXT NOT NULL,
+		description TEXT NOT NULL
+	);
 	CREATE TABLE IF NOT EXISTS auto_approval_rules (
 		id             INTEGER PRIMARY KEY AUTOINCREMENT,
 		category_key   TEXT,
@@ -204,6 +210,57 @@ func (d *DB) queryMessages(query string) ([]ProcessedMessage, error) {
 		msgs = append(msgs, m)
 	}
 	return msgs, rows.Err()
+}
+
+// --- Custom categories ---
+
+type CustomCategory struct {
+	ID          int64
+	Key         string
+	Name        string
+	Description string
+}
+
+func (d *DB) SetCustomCategories(cats []CustomCategory) error {
+	tx, err := d.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	_, err = tx.Exec("DELETE FROM custom_categories")
+	if err != nil {
+		return err
+	}
+	for _, c := range cats {
+		_, err = tx.Exec("INSERT INTO custom_categories (key, name, description) VALUES (?, ?, ?)", c.Key, c.Name, c.Description)
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (d *DB) GetCustomCategories() ([]CustomCategory, error) {
+	rows, err := d.conn.Query("SELECT id, key, name, description FROM custom_categories ORDER BY id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var cats []CustomCategory
+	for rows.Next() {
+		var c CustomCategory
+		if err := rows.Scan(&c.ID, &c.Key, &c.Name, &c.Description); err != nil {
+			return nil, err
+		}
+		cats = append(cats, c)
+	}
+	return cats, rows.Err()
+}
+
+func (d *DB) HasCustomCategories() bool {
+	var count int
+	d.conn.QueryRow("SELECT COUNT(*) FROM custom_categories").Scan(&count)
+	return count > 0
 }
 
 // --- Auto-approval rules ---
