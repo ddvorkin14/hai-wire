@@ -37,14 +37,18 @@ export function LiveFeed() {
   const [routeFilter, setRouteFilter] = useState<RouteFilter>('all');
   const [refreshInterval, setRefreshInterval] = useState(5000);
   const [countdown, setCountdown] = useState(5);
+  const [refreshing, setRefreshing] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
   const countdownRef = useRef<ReturnType<typeof setInterval>>();
 
   const loadMessages = useCallback(() => {
+    setRefreshing(true);
     GetProcessedMessages(50).then((msgs) => {
       if (msgs && msgs.length > 0) {
         setEvents(msgs.map(mapMessage));
       }
+    }).finally(() => {
+      setTimeout(() => setRefreshing(false), 300);
     });
   }, []);
 
@@ -162,9 +166,9 @@ export function LiveFeed() {
             ))}
           </div>
           <button onClick={() => { loadMessages(); setCountdown(Math.round(refreshInterval / 1000)); }}
-            className="px-3 py-1.5 rounded text-sm font-medium bg-slate-700 text-slate-300 hover:bg-slate-600"
+            className={`px-3 py-1.5 rounded text-sm font-medium bg-slate-700 text-slate-300 hover:bg-slate-600 ${refreshing ? 'opacity-50' : ''}`}
             title="Refresh now">
-            Refresh
+            {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
           <button onClick={toggle}
             className={`px-4 py-1.5 rounded text-sm font-medium ${
@@ -174,6 +178,13 @@ export function LiveFeed() {
           </button>
         </div>
       </div>
+
+      {/* Loading bar */}
+      {refreshing && (
+        <div className="h-0.5 bg-slate-700 rounded mb-2 overflow-hidden">
+          <div className="h-full bg-amber-400 animate-pulse w-full" />
+        </div>
+      )}
 
       {/* Stats bar */}
       {events.length > 0 && (
