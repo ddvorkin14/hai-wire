@@ -3,8 +3,14 @@ import {
   GetAllConfig, GetOwnedCategories, GetAllCategories,
   SaveSquadConfig, SaveOwnedCategories, SaveConfidenceThreshold, SaveWatchChannel,
   SaveAnthropicKey, IsSlackConnected, GetSlackStatus, ReconnectSlack, TestWatchChannel, TestTriageChannel,
+  GetMentionGroups,
 } from '../../../wailsjs/go/main/App';
 import type { Category } from '../../types';
+
+interface MentionGroup {
+  id: string;
+  handle: string;
+}
 
 export function Settings() {
   const [config, setConfig] = useState<Record<string, string>>({});
@@ -16,6 +22,8 @@ export function Settings() {
   const [dirty, setDirty] = useState(false);
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; msg: string }>>({});
   const [testing, setTesting] = useState<Record<string, boolean>>({});
+  const [mentionGroups, setMentionGroups] = useState<MentionGroup[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -92,6 +100,15 @@ export function Settings() {
     }
   };
 
+  const loadMentionGroups = async () => {
+    setLoadingGroups(true);
+    try {
+      const groups = await GetMentionGroups();
+      setMentionGroups(groups || []);
+    } catch {}
+    setLoadingGroups(false);
+  };
+
   const handleReconnectSlack = async () => {
     try {
       const team = await ReconnectSlack();
@@ -160,12 +177,28 @@ export function Settings() {
                 className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400" />
             </div>
             <div>
-              <label className="block text-xs text-slate-500 mb-1">Ping Group Handle</label>
-              <input value={config.ping_group || ''} onChange={(e) => update('ping_group', e.target.value)}
-                placeholder="e.g., @hai-conversion-on-call"
-                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400" />
+              <label className="block text-xs text-slate-500 mb-1">Ping Group</label>
+              <div className="flex gap-2">
+                {mentionGroups.length > 0 ? (
+                  <select value={config.ping_group || ''} onChange={(e) => update('ping_group', e.target.value)}
+                    className="flex-1 bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400 text-slate-300">
+                    <option value="">Select a group...</option>
+                    {mentionGroups.map((g) => (
+                      <option key={g.id} value={g.id}>{g.handle || g.id}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input value={config.ping_group || ''} onChange={(e) => update('ping_group', e.target.value)}
+                    placeholder="Group ID (e.g., S091P70JAP5)"
+                    className="flex-1 bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400" />
+                )}
+                <button onClick={loadMentionGroups} disabled={loadingGroups || !slackConnected}
+                  className="bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-slate-300 text-xs px-3 py-2 rounded whitespace-nowrap">
+                  {loadingGroups ? 'Scanning...' : mentionGroups.length > 0 ? 'Refresh' : 'Find Groups'}
+                </button>
+              </div>
               <p className="text-xs text-slate-600 mt-1">
-                The Slack user group handle to ping. Find it in Slack: type @ and search for your group.
+                Click "Find Groups" to scan the watch channel for user groups that are commonly tagged. Or enter a group ID manually (starts with S).
               </p>
             </div>
           </div>

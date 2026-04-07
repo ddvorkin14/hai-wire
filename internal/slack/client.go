@@ -142,6 +142,95 @@ func (c *Client) GetUserName(userID string) string {
 	return user.RealName
 }
 
+// ExtractMentionGroups scans recent messages in a channel for <!subteam^ID> patterns
+// and returns unique group IDs with their handles.
+func (c *Client) ExtractMentionGroups(channelID string) ([]MentionGroup, error) {
+	msgs, err := c.FetchNewMessages(channelID, "")
+	if err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]bool)
+	var groups []MentionGroup
+	for _, msg := range msgs {
+		// Find all <!subteam^XXXXX> or <!subteam^XXXXX|@handle> patterns
+		text := msg.Text
+		for {
+			idx := indexOf(text, "<!subteam^")
+			if idx == -1 {
+				break
+			}
+			rest := text[idx+10:]
+			endIdx := indexOfAny(rest, ">|")
+			if endIdx == -1 {
+				break
+			}
+			id := rest[:endIdx]
+			if !seen[id] {
+				seen[id] = true
+				// Try to extract handle if present
+				handle := ""
+				if endIdx < len(rest) && rest[endIdx] == '|' {
+					handleEnd := indexOf(rest[endIdx+1:], ">")
+					if handleEnd != -1 {
+						handle = rest[endIdx+1 : endIdx+1+handleEnd]
+					}
+				}
+				groups = append(groups, MentionGroup{ID: id, Handle: handle})
+			}
+			text = rest[endIdx:]
+		}
+	}
+	return groups, nil
+}
+
+type MentionGroup struct {
+	ID     string `json:"id"`
+	Handle string `json:"handle"`
+}
+
+func indexOf(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}
+
+func indexOfAny(s, chars string) int {
+	for i := 0; i < len(s); i++ {
+		for j := 0; j < len(chars); j++ {
+			if s[i] == chars[j] {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// FormatMention formats a ping group for proper Slack rendering.
+// Input can be: subteam ID (S0XXX), @handle, or <!subteam^ID>.
+func FormatMention(input string) string {
+	if input == "" {
+		return ""
+	}
+	// Already formatted
+	if len(input) > 10 && input[:10] == "<!subteam^" {
+		return input
+	}
+	// Raw subteam ID
+	if len(input) > 1 && input[0] == 'S' {
+		return "<!subteam^" + input + ">"
+	}
+	// User ID
+	if len(input) > 1 && input[0] == 'U' {
+		return "<@" + input + ">"
+	}
+	// @handle -- just pass through, won't render as a mention but better than nothing
+	return input
+}
+
 func (c *Client) GetPermalink(channelID, messageTS string) string {
 	link, err := c.api.GetPermalink(&slack.PermalinkParameters{
 		Channel: channelID,

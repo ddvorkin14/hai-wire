@@ -16,6 +16,8 @@ export function GetAllConfig():Promise<Record<string, string>>;
 
 export function GetAutoApprovalRules():Promise<Array<db.AutoApprovalRule>>;
 
+export function GetMentionGroups():Promise<Array<slack.MentionGroup>>;
+
 export function GetOwnedCategories():Promise<Record<string, string>>;
 
 export function GetPendingMessages():Promise<Array<db.ProcessedMessage>>;

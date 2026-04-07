@@ -161,6 +161,18 @@ func (a *App) SaveConfidenceThreshold(threshold string) error {
 	return a.config.SetConfidenceThreshold(threshold)
 }
 
+// GetMentionGroups scans the watch channel for user group mentions and returns them.
+func (a *App) GetMentionGroups() ([]slackclient.MentionGroup, error) {
+	if a.slack == nil {
+		return nil, fmt.Errorf("Slack not connected")
+	}
+	watchChannel, _ := a.config.GetWatchChannelID()
+	if watchChannel == "" {
+		return nil, fmt.Errorf("Watch channel not configured")
+	}
+	return a.slack.ExtractMentionGroups(watchChannel)
+}
+
 // TestWatchChannel verifies we can read from the watch channel (no message sent).
 func (a *App) TestWatchChannel(channelID string) (string, error) {
 	if a.slack == nil {
@@ -310,6 +322,7 @@ func (a *App) ApproveMessage(messageTS string) error {
 	// Route it
 	triageChannel, _ := a.config.GetTriageChannelID()
 	pingGroup, _ := a.config.GetPingGroup()
+	formattedPing := slackclient.FormatMention(pingGroup)
 	watchChannel, _ := a.config.GetWatchChannelID()
 	ownedCats, _ := a.db.GetOwnedCategories()
 	catName := ownedCats[msg.Category]
@@ -326,7 +339,7 @@ func (a *App) ApproveMessage(messageTS string) error {
 	}
 	permalink := a.slack.GetPermalink(watchChannel, msg.MessageTS)
 	triageMsg := fmt.Sprintf("%s *[Confidence: %d%%] %s*\n\n*Summary:* %s\n\n*Original post:* %s\n*Posted by:* %s\n\n%s",
-		emoji, pct, catName, msg.Summary, permalink, msg.Author, pingGroup)
+		emoji, pct, catName, msg.Summary, permalink, msg.Author, formattedPing)
 
 	if err := a.slack.PostToChannel(triageChannel, triageMsg); err != nil {
 		return fmt.Errorf("post to triage: %v", err)
@@ -503,8 +516,9 @@ func (a *App) processMessage(ctx context.Context, cls *classifier.Classifier, ts
 			emoji = "🔴"
 		}
 		permalink := a.slack.GetPermalink(watchChannel, ts)
+		formattedPing := slackclient.FormatMention(pingGroup)
 		triageMsg := fmt.Sprintf("%s *[Confidence: %d%%] %s*\n\n*Summary:* %s\n\n*Original post:* %s\n*Posted by:* %s\n\n%s",
-			emoji, pct, catName, result.Summary, permalink, authorName, pingGroup)
+			emoji, pct, catName, result.Summary, permalink, authorName, formattedPing)
 		a.slack.PostToChannel(triageChannel, triageMsg)
 		a.slack.ReplyInThread(watchChannel, ts, "This support request has been analyzed and the appropriate team has been notified.")
 	}
