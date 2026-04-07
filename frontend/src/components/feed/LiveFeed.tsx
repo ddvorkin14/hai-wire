@@ -51,9 +51,18 @@ export function LiveFeed() {
     return Array.from(cats).sort();
   }, [events]);
 
-  // Filter events
+  // Sort by latest first (highest message_ts = newest), then filter
+  const sorted = useMemo(() => {
+    return [...events].sort((a, b) => {
+      // message_ts is a Slack timestamp like "1234567890.123456"
+      const tsA = parseFloat(a.message_ts || '0');
+      const tsB = parseFloat(b.message_ts || '0');
+      return tsB - tsA;
+    });
+  }, [events]);
+
   const filtered = useMemo(() => {
-    return events.filter((e) => {
+    return sorted.filter((e) => {
       if (search) {
         const q = search.toLowerCase();
         const matchesSearch = e.author.toLowerCase().includes(q) ||
@@ -69,7 +78,7 @@ export function LiveFeed() {
       if (routeFilter === 'not_routed' && e.routed) return false;
       return true;
     });
-  }, [events, search, categoryFilter, confidenceFilter, routeFilter]);
+  }, [sorted, search, categoryFilter, confidenceFilter, routeFilter]);
 
   // Stats
   const stats = useMemo(() => {
