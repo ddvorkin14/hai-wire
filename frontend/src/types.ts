@@ -19,6 +19,7 @@ export interface ProcessedMessage {
   Summary: string;
   Reasoning: string;
   Routed: boolean;
+  Status: string;
   CreatedAt: string;
 }
 

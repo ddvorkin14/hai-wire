@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { EventsOn } from '../../../wailsjs/runtime/runtime';
 import { IsMonitoring, StartMonitoring, StopMonitoring, GetProcessedMessages } from '../../../wailsjs/go/main/App';
 import { MessageCard } from './MessageCard';
@@ -7,6 +7,27 @@ import type { TriageEvent, ProcessedMessage } from '../../types';
 type ConfidenceFilter = 'all' | 'high' | 'medium' | 'low';
 type RouteFilter = 'all' | 'routed' | 'not_routed';
 
+const INTERVALS = [
+  { label: '5s', value: 5000 },
+  { label: '10s', value: 10000 },
+  { label: '30s', value: 30000 },
+  { label: '1m', value: 60000 },
+  { label: '5m', value: 300000 },
+];
+
+function mapMessage(m: ProcessedMessage): TriageEvent {
+  return {
+    message_ts: m.MessageTS,
+    author: m.Author,
+    category: m.Category,
+    confidence: m.Confidence,
+    summary: m.Summary,
+    reasoning: m.Reasoning,
+    routed: m.Routed,
+    status: m.Status,
+  };
+}
+
 export function LiveFeed() {
   const [events, setEvents] = useState<TriageEvent[]>([]);
   const [running, setRunning] = useState(false);
@@ -14,26 +35,37 @@ export function LiveFeed() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>('all');
   const [routeFilter, setRouteFilter] = useState<RouteFilter>('all');
+  const [refreshInterval, setRefreshInterval] = useState(5000);
+  const intervalRef = useRef<ReturnType<typeof setInterval>>();
+
+  const loadMessages = useCallback(() => {
+    GetProcessedMessages(50).then((msgs) => {
+      if (msgs && msgs.length > 0) {
+        setEvents(msgs.map(mapMessage));
+      }
+    });
+  }, []);
 
   useEffect(() => {
     IsMonitoring().then(setRunning);
-    GetProcessedMessages(50).then((msgs) => {
-      if (msgs && msgs.length > 0) {
-        setEvents(msgs.map((m: ProcessedMessage) => ({
-          message_ts: m.MessageTS,
-          author: m.Author,
-          category: m.Category,
-          confidence: m.Confidence,
-          summary: m.Summary,
-          reasoning: m.Reasoning,
-          routed: m.Routed,
-        })));
-      }
-    });
+    loadMessages();
+
     EventsOn('triage:event', (event: TriageEvent) => {
-      setEvents((prev) => [event, ...prev]);
+      setEvents((prev) => {
+        // Deduplicate by message_ts
+        const exists = prev.some(e => e.message_ts === event.message_ts);
+        if (exists) return prev;
+        return [event, ...prev];
+      });
     });
   }, []);
+
+  // Auto-refresh on interval
+  useEffect(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(loadMessages, refreshInterval);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [refreshInterval, loadMessages]);
 
   const toggle = async () => {
     if (running) {
@@ -42,19 +74,19 @@ export function LiveFeed() {
     } else {
       await StartMonitoring();
       setRunning(true);
+      // Reload immediately after starting
+      setTimeout(loadMessages, 1000);
     }
   };
 
-  // Get unique categories for filter dropdown
   const categories = useMemo(() => {
     const cats = new Set(events.map(e => e.category));
     return Array.from(cats).sort();
   }, [events]);
 
-  // Sort by latest first (highest message_ts = newest), then filter
+  // Already sorted by DB (newest first via created_at DESC), but ensure by message_ts
   const sorted = useMemo(() => {
     return [...events].sort((a, b) => {
-      // message_ts is a Slack timestamp like "1234567890.123456"
       const tsA = parseFloat(a.message_ts || '0');
       const tsB = parseFloat(b.message_ts || '0');
       return tsB - tsA;
@@ -65,10 +97,9 @@ export function LiveFeed() {
     return sorted.filter((e) => {
       if (search) {
         const q = search.toLowerCase();
-        const matchesSearch = e.author.toLowerCase().includes(q) ||
-          e.summary.toLowerCase().includes(q) ||
-          e.category.toLowerCase().includes(q);
-        if (!matchesSearch) return false;
+        if (!e.author.toLowerCase().includes(q) &&
+            !e.summary.toLowerCase().includes(q) &&
+            !e.category.toLowerCase().includes(q)) return false;
       }
       if (categoryFilter !== 'all' && e.category !== categoryFilter) return false;
       if (confidenceFilter === 'high' && e.confidence < 0.8) return false;
@@ -80,15 +111,13 @@ export function LiveFeed() {
     });
   }, [sorted, search, categoryFilter, confidenceFilter, routeFilter]);
 
-  // Stats
-  const stats = useMemo(() => {
-    const total = events.length;
-    const routed = events.filter(e => e.routed).length;
-    const high = events.filter(e => e.confidence >= 0.8).length;
-    const medium = events.filter(e => e.confidence >= 0.5 && e.confidence < 0.8).length;
-    const low = events.filter(e => e.confidence < 0.5).length;
-    return { total, routed, high, medium, low };
-  }, [events]);
+  const stats = useMemo(() => ({
+    total: events.length,
+    routed: events.filter(e => e.routed).length,
+    high: events.filter(e => e.confidence >= 0.8).length,
+    medium: events.filter(e => e.confidence >= 0.5 && e.confidence < 0.8).length,
+    low: events.filter(e => e.confidence < 0.5).length,
+  }), [events]);
 
   return (
     <div className="h-full flex flex-col p-6">
@@ -101,12 +130,26 @@ export function LiveFeed() {
             {running ? 'Monitoring' : 'Stopped'}
           </span>
         </div>
-        <button onClick={toggle}
-          className={`px-4 py-1.5 rounded text-sm font-medium ${
-            running ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
-          }`}>
-          {running ? 'Stop' : 'Start'}
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded px-1">
+            {INTERVALS.map((iv) => (
+              <button key={iv.value} onClick={() => setRefreshInterval(iv.value)}
+                className={`px-2 py-1 text-xs rounded transition-colors ${
+                  refreshInterval === iv.value
+                    ? 'bg-slate-700 text-amber-400'
+                    : 'text-slate-500 hover:text-slate-300'
+                }`}>
+                {iv.label}
+              </button>
+            ))}
+          </div>
+          <button onClick={toggle}
+            className={`px-4 py-1.5 rounded text-sm font-medium ${
+              running ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+            }`}>
+            {running ? 'Stop' : 'Start'}
+          </button>
+        </div>
       </div>
 
       {/* Stats bar */}
@@ -138,12 +181,9 @@ export function LiveFeed() {
       {/* Search + Filters */}
       {events.length > 0 && (
         <div className="flex gap-2 mb-4">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+          <input value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Search author, summary, category..."
-            className="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-amber-400 placeholder-slate-600"
-          />
+            className="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-amber-400 placeholder-slate-600" />
           <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}
             className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-amber-400 text-slate-300">
             <option value="all">All categories</option>
@@ -187,7 +227,7 @@ export function LiveFeed() {
         ) : filtered.length === 0 ? (
           <div className="text-slate-500 text-sm text-center mt-12">No messages match your filters.</div>
         ) : (
-          filtered.map((event, i) => <MessageCard key={event.message_ts || i} event={event} />)
+          filtered.map((event, i) => <MessageCard key={event.message_ts || i} event={event} onRouted={loadMessages} />)
         )}
       </div>
     </div>
