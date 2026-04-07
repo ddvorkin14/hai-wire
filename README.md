@@ -36,17 +36,17 @@ Support channels are noisy. Requests meant for your squad get buried. Manual tri
 
 ```
    #hai-support                    HAI-Wire                        Your Squad
-  ┌─────────────┐    polls     ┌──────────────┐    routes     ┌────────────────┐
-  │ New support  │ ──────────> │  Claude AI    │ ──────────> │ #squad-triage   │
+  ┌──────────────┐    polls    ┌───────────────┐    routes    ┌─────────────────┐
+  │ New support  │ ──────────> │  Claude AI    │ ──────────>  │ #squad-triage   │
   │ request      │  every 30s  │  classifies   │  if approved │ with confidence │
   │ posted       │             │  + scores     │              │ score + summary │
-  └─────────────┘             └──────────────┘              └────────────────┘
+  └──────────────┘             └───────────────┘              └─────────────────┘
                                      │
                                      v
-                              ┌──────────────┐
+                              ┌───────────────┐
                               │ Review Queue  │
                               │ approve/skip  │
-                              └──────────────┘
+                              └───────────────┘
 ```
 
 1. **Monitors** a Slack channel by polling for new messages
@@ -251,7 +251,7 @@ wails dev
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────────┐
 │                    Wails v2 App                      │
 │                                                      │
 │  ┌──────────────────┐    ┌────────────────────────┐  │
@@ -275,7 +275,7 @@ wails dev
 │  │  │ Service    │◄─┼────┼──└──────────────────┘  │  │
 │  │  └────────────┘  │    │                        │  │
 │  └──────────────────┘    └────────────────────────┘  │
-└─────────────────────────────────────────────────────┘
+└──────────────────────────────────────────────────────┘
 ```
 
 ### Tech Stack
