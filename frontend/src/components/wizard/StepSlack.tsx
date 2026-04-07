@@ -1,22 +1,29 @@
 import { useState } from 'react';
-import { SaveSlackToken } from '../../../wailsjs/go/main/App';
+import { ConnectSlack, GetSlackAuthURL } from '../../../wailsjs/go/main/App';
 
 interface Props { onNext: () => void; }
 
 export function StepSlack({ onNext }: Props) {
-  const [token, setToken] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [teamName, setTeamName] = useState('');
+  const [authURL, setAuthURL] = useState('');
 
   const handleConnect = async () => {
     setError('');
+    setAuthURL('');
     setLoading(true);
     try {
-      const team = await SaveSlackToken(token);
+      const team = await ConnectSlack();
       setTeamName(team);
     } catch (e: any) {
-      setError(e?.message || 'Invalid token. Make sure it starts with xoxb- or xoxp-.');
+      const msg = e?.message || String(e);
+      setError(msg);
+      // Try to get the auth URL for manual copy-paste
+      try {
+        const url = await GetSlackAuthURL();
+        if (url) setAuthURL(url);
+      } catch {}
     } finally {
       setLoading(false);
     }
@@ -39,31 +46,52 @@ export function StepSlack({ onNext }: Props) {
   return (
     <div>
       <h2 className="text-xl font-semibold mb-4">Connect Slack</h2>
-      <p className="text-slate-400 text-sm mb-4">
-        Paste your Slack token below. This can be a bot token (<code className="text-amber-400/70">xoxb-</code>) or a user token (<code className="text-amber-400/70">xoxp-</code>).
+      <p className="text-slate-400 text-sm mb-6">
+        Click the button below to connect to your Slack workspace. A browser window will open for you to authorize HAI-Wire.
       </p>
       <div className="space-y-4">
-        <div>
-          <label className="block text-sm text-slate-300 mb-1">Slack Token</label>
-          <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="xoxb-... or xoxp-..."
-            className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400" />
-        </div>
-        <div className="bg-slate-700/50 border border-slate-600 rounded p-3">
-          <p className="text-xs text-slate-400 font-medium mb-1">Where to get a token:</p>
-          <ul className="text-xs text-slate-500 space-y-1 list-disc list-inside">
-            <li>Ask your Slack app admin for the bot or user OAuth token</li>
-            <li>
-              Or create your own app at{' '}
-              <a href="https://api.slack.com/apps" target="_blank" rel="noreferrer" className="text-amber-400/70 underline">api.slack.com/apps</a>
-              {' '}&rarr; add scopes (<code className="text-amber-400/60">channels:history</code>, <code className="text-amber-400/60">channels:read</code>, <code className="text-amber-400/60">chat:write</code>, <code className="text-amber-400/60">users:read</code>) &rarr; Install to Workspace &rarr; copy the token
-            </li>
-          </ul>
-        </div>
-        {error && <p className="text-red-400 text-sm">{error}</p>}
-        <button onClick={handleConnect} disabled={loading || !token}
-          className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-900 font-medium px-6 py-2 rounded">
-          {loading ? 'Connecting...' : 'Connect'}
+        {error && (
+          <div className="bg-red-900/20 border border-red-700/50 rounded p-3">
+            <p className="text-red-400 text-sm mb-2">{error}</p>
+            <p className="text-slate-500 text-xs">Something went wrong. Click below to try again.</p>
+          </div>
+        )}
+
+        {authURL && (
+          <div className="bg-slate-700/50 border border-slate-600 rounded p-3">
+            <p className="text-slate-300 text-xs mb-2">Browser didn't open? Copy this URL and paste it in your browser:</p>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={authURL}
+                className="flex-1 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-slate-400 font-mono truncate"
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+              <button
+                onClick={() => navigator.clipboard.writeText(authURL)}
+                className="bg-slate-600 hover:bg-slate-500 text-xs text-slate-200 px-3 py-1 rounded whitespace-nowrap"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        )}
+
+        <button onClick={handleConnect} disabled={loading}
+          className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-900 font-semibold px-6 py-3 rounded text-lg">
+          {loading ? 'Waiting for authorization...' : error ? 'Try Again' : 'Connect to Slack'}
         </button>
+        {loading && (
+          <div className="text-center space-y-2">
+            <p className="text-slate-400 text-sm">
+              A browser window should have opened. Complete the authorization there.
+            </p>
+            <button onClick={() => setLoading(false)}
+              className="text-amber-400/70 text-xs underline hover:text-amber-400">
+              Cancel and try again
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

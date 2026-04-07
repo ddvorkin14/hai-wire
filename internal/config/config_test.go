@@ -47,7 +47,7 @@ func TestService_IsSetupComplete_True(t *testing.T) {
 	defer database.Close()
 	svc := NewService(database)
 
-	svc.SetSlackToken("xoxb-test")
+	svc.SetSlackConnected("true")
 	svc.SetAnthropicKey("sk-ant-test")
 	svc.SetWatchChannelID("C12345")
 	svc.SetTriageChannelID("C67890")

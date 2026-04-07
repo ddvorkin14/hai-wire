@@ -12,8 +12,8 @@ func NewService(database *db.DB) *Service {
 	return &Service{db: database}
 }
 
-func (s *Service) SetSlackToken(token string) error    { return s.db.SetConfig("slack_token", token) }
-func (s *Service) GetSlackToken() (string, error)      { return s.db.GetConfig("slack_token") }
+func (s *Service) SetSlackConnected(val string) error   { return s.db.SetConfig("slack_connected", val) }
+func (s *Service) GetSlackConnected() (string, error)   { return s.db.GetConfig("slack_connected") }
 func (s *Service) SetAnthropicKey(key string) error    { return s.db.SetConfig("anthropic_key", key) }
 func (s *Service) GetAnthropicKey() (string, error)    { return s.db.GetConfig("anthropic_key") }
 func (s *Service) SetWatchChannelID(id string) error   { return s.db.SetConfig("watch_channel_id", id) }
@@ -41,7 +41,7 @@ func (s *Service) GetConfidenceThreshold() (string, error) {
 }
 
 func (s *Service) IsSetupComplete() bool {
-	required := []string{"slack_token", "anthropic_key", "watch_channel_id", "triage_channel_id", "squad_name", "ping_group"}
+	required := []string{"slack_connected", "anthropic_key", "watch_channel_id", "triage_channel_id", "squad_name", "ping_group"}
 	for _, key := range required {
 		val, err := s.db.GetConfig(key)
 		if err != nil || val == "" {
@@ -52,7 +52,7 @@ func (s *Service) IsSetupComplete() bool {
 }
 
 func (s *Service) GetAllConfig() (map[string]string, error) {
-	keys := []string{"slack_token", "anthropic_key", "watch_channel_id", "triage_channel_id", "squad_name", "ping_group", "confidence_threshold"}
+	keys := []string{"slack_connected", "anthropic_key", "watch_channel_id", "triage_channel_id", "squad_name", "ping_group", "confidence_threshold"}
 	result := make(map[string]string)
 	for _, key := range keys {
 		val, err := s.db.GetConfig(key)
