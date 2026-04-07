@@ -36,7 +36,9 @@ export function LiveFeed() {
   const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>('all');
   const [routeFilter, setRouteFilter] = useState<RouteFilter>('all');
   const [refreshInterval, setRefreshInterval] = useState(5000);
+  const [countdown, setCountdown] = useState(5);
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
+  const countdownRef = useRef<ReturnType<typeof setInterval>>();
 
   const loadMessages = useCallback(() => {
     GetProcessedMessages(50).then((msgs) => {
@@ -60,11 +62,27 @@ export function LiveFeed() {
     });
   }, []);
 
-  // Auto-refresh on interval
+  // Auto-refresh on interval + countdown
   useEffect(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(loadMessages, refreshInterval);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    if (countdownRef.current) clearInterval(countdownRef.current);
+
+    const secs = Math.round(refreshInterval / 1000);
+    setCountdown(secs);
+
+    intervalRef.current = setInterval(() => {
+      loadMessages();
+      setCountdown(secs);
+    }, refreshInterval);
+
+    countdownRef.current = setInterval(() => {
+      setCountdown((prev) => (prev > 0 ? prev - 1 : secs));
+    }, 1000);
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
   }, [refreshInterval, loadMessages]);
 
   const toggle = async () => {
@@ -143,11 +161,16 @@ export function LiveFeed() {
               </button>
             ))}
           </div>
+          <button onClick={() => { loadMessages(); setCountdown(Math.round(refreshInterval / 1000)); }}
+            className="px-3 py-1.5 rounded text-sm font-medium bg-slate-700 text-slate-300 hover:bg-slate-600"
+            title="Refresh now">
+            Refresh
+          </button>
           <button onClick={toggle}
             className={`px-4 py-1.5 rounded text-sm font-medium ${
               running ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
             }`}>
-            {running ? 'Stop' : 'Start'}
+            {running ? `Stop (${countdown})` : 'Start'}
           </button>
         </div>
       </div>
