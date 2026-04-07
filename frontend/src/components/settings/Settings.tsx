@@ -152,7 +152,8 @@ export function Settings() {
   const thresholdLabel = threshold >= 80 ? 'High' : threshold >= 50 ? 'Medium' : 'Low';
 
   return (
-    <div className="h-full overflow-y-auto p-6">
+    <div className="h-full flex flex-col">
+      <div className="flex-1 overflow-y-auto p-6">
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Settings</h2>
@@ -347,16 +348,22 @@ export function Settings() {
           </div>
         </section>
 
-        {/* Bottom save */}
-        {dirty && (
-          <div className="sticky bottom-0 bg-slate-900/90 backdrop-blur py-3 -mx-6 px-6 border-t border-slate-700">
+        {/* Spacer so content isn't hidden behind save bar */}
+        {dirty && <div className="h-16" />}
+      </div>
+      </div>
+
+      {/* Fixed bottom save bar */}
+      {dirty && (
+        <div className="border-t border-slate-700 bg-slate-800 px-6 py-3">
+          <div className="max-w-2xl mx-auto">
             <button onClick={handleSave}
               className="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-medium px-6 py-2 rounded">
               Save Changes
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

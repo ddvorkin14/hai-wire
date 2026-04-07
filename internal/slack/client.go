@@ -233,17 +233,22 @@ func (c *Client) ExtractMentionTargets(channelID string) ([]MentionTarget, error
 	return targets, nil
 }
 
-// SearchUsers searches for Slack users by name and returns them as mention targets.
+// SearchUsers searches for Slack users by name using the paginated API.
 func (c *Client) SearchUsers(query string) ([]MentionTarget, error) {
-	// Use users.list with a client-side filter since search API needs different scopes
-	users, err := c.api.GetUsers()
+	query = strings.ToLower(query)
+	var results []MentionTarget
+
+	opts := []slack.GetUsersOption{
+		slack.GetUsersOptionTeamID(c.teamID),
+		slack.GetUsersOptionLimit(200),
+	}
+
+	users, err := c.api.GetUsers(opts...)
 	if err != nil {
-		log.Printf("SearchUsers API error: %v", err)
+		log.Printf("SearchUsers error: %v", err)
 		return nil, nil
 	}
 
-	query = strings.ToLower(query)
-	var results []MentionTarget
 	for _, u := range users {
 		if u.Deleted || u.IsBot {
 			continue
@@ -259,7 +264,7 @@ func (c *Client) SearchUsers(query string) ([]MentionTarget, error) {
 			strings.Contains(strings.ToLower(u.Name), query) {
 			results = append(results, MentionTarget{ID: u.ID, Name: name, Type: "user"})
 		}
-		if len(results) >= 20 {
+		if len(results) >= 15 {
 			break
 		}
 	}
