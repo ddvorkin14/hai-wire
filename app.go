@@ -109,9 +109,16 @@ func (a *App) ReconnectSlack() (string, error) {
 
 func (a *App) ListSlackChannels() ([]slackclient.ChannelInfo, error) {
 	if a.slack == nil {
+		log.Printf("ListSlackChannels: slack is nil")
 		return nil, fmt.Errorf("Slack not connected")
 	}
-	return a.slack.ListChannels()
+	channels, err := a.slack.ListChannels()
+	if err != nil {
+		log.Printf("ListSlackChannels error: %v", err)
+		return nil, err
+	}
+	log.Printf("ListSlackChannels: returning %d channels", len(channels))
+	return channels, nil
 }
 
 // --- Config ---

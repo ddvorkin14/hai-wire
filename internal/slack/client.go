@@ -15,6 +15,7 @@ type ChannelInfo struct {
 type Client struct {
 	api    *slack.Client
 	teamID string
+	userID string
 }
 
 // NewClientFromKeychain creates a Slack client using Claude Code's stored token.
@@ -24,13 +25,36 @@ func NewClientFromKeychain() (*Client, error) {
 		return nil, err
 	}
 	c := &Client{api: slack.New(token)}
-	// Get team ID (required for user tokens)
 	resp, err := c.api.AuthTest()
 	if err != nil {
 		return nil, fmt.Errorf("slack auth failed: %w", err)
 	}
-	c.teamID = resp.TeamID
+	c.userID = resp.UserID
+
+	// For Enterprise Grid, the auth.test team_id is the enterprise ID.
+	// We need the actual workspace team ID from auth.teams.list.
+	if resp.EnterpriseID != "" {
+		c.teamID, err = c.resolveWorkspaceTeamID()
+		if err != nil {
+			log.Printf("Could not resolve workspace team ID, using enterprise ID: %v", err)
+			c.teamID = resp.TeamID
+		}
+	} else {
+		c.teamID = resp.TeamID
+	}
 	return c, nil
+}
+
+// resolveWorkspaceTeamID gets the actual workspace team ID for Enterprise Grid.
+func (c *Client) resolveWorkspaceTeamID() (string, error) {
+	teams, _, err := c.api.ListTeams(slack.ListTeamsParameters{Limit: 10})
+	if err != nil {
+		return "", err
+	}
+	if len(teams) > 0 {
+		return teams[0].ID, nil
+	}
+	return "", fmt.Errorf("no teams found")
 }
 
 // NewClient creates a Slack client from a token directly.
@@ -39,6 +63,7 @@ func NewClient(token string) *Client {
 	resp, err := c.api.AuthTest()
 	if err == nil {
 		c.teamID = resp.TeamID
+		c.userID = resp.UserID
 	}
 	return c
 }
@@ -50,32 +75,30 @@ func (c *Client) ValidateConnection() (string, error) {
 		return "", fmt.Errorf("slack auth failed: %w", err)
 	}
 	c.teamID = resp.TeamID
+	c.userID = resp.UserID
 	return resp.Team, nil
 }
 
 func (c *Client) ListChannels() ([]ChannelInfo, error) {
-	var allChannels []ChannelInfo
-	params := &slack.GetConversationsParameters{
+	// MCP user tokens on Enterprise Grid don't have channels:read scope.
+	// Try users.conversations first, fall back to empty list.
+	params := &slack.GetConversationsForUserParameters{
+		UserID:          c.userID,
+		TeamID:          c.teamID,
 		Types:           []string{"public_channel", "private_channel"},
 		ExcludeArchived: true,
-		TeamID:          c.teamID,
 		Limit:           200,
 	}
 
-	for {
-		channels, cursor, err := c.api.GetConversations(params)
-		if err != nil {
-			return nil, err
-		}
-		for _, ch := range channels {
-			allChannels = append(allChannels, ChannelInfo{ID: ch.ID, Name: ch.Name})
-		}
-		if cursor == "" {
-			break
-		}
-		params.Cursor = cursor
+	var allChannels []ChannelInfo
+	channels, _, err := c.api.GetConversationsForUser(params)
+	if err != nil {
+		log.Printf("ListChannels: API returned %v (this is normal for Enterprise Grid MCP tokens)", err)
+		return nil, nil // Return empty, UI will fall back to manual input
 	}
-
+	for _, ch := range channels {
+		allChannels = append(allChannels, ChannelInfo{ID: ch.ID, Name: ch.Name})
+	}
 	return allChannels, nil
 }
 

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { SaveSquadConfig, GetAllConfig, ListSlackChannels, IsSlackConnected } from '../../../wailsjs/go/main/App';
-import type { ChannelInfo } from '../../types';
+import { SaveSquadConfig, GetAllConfig } from '../../../wailsjs/go/main/App';
 
 interface Props { onNext: () => void; onBack: () => void; }
 
@@ -8,21 +7,12 @@ export function StepSquad({ onNext, onBack }: Props) {
   const [squadName, setSquadName] = useState('');
   const [pingGroup, setPingGroup] = useState('');
   const [triageChannel, setTriageChannel] = useState('');
-  const [channels, setChannels] = useState<ChannelInfo[]>([]);
-  const [slackReady, setSlackReady] = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      GetAllConfig(),
-      IsSlackConnected().catch(() => false),
-    ]).then(([config, connected]) => {
+    GetAllConfig().then((config) => {
       if (config.squad_name) setSquadName(config.squad_name);
       if (config.ping_group) setPingGroup(config.ping_group);
       if (config.triage_channel_id) setTriageChannel(config.triage_channel_id);
-      setSlackReady(connected as boolean);
-      if (connected) {
-        ListSlackChannels().then((chs) => setChannels(chs || []));
-      }
     });
   }, []);
 
@@ -48,31 +38,19 @@ export function StepSquad({ onNext, onBack }: Props) {
 
         <div>
           <label className="block text-sm text-slate-300 mb-1">Ping Group</label>
-          <p className="text-xs text-slate-500 mb-1.5">The Slack user group handle that gets pinged when a request is routed to your squad.</p>
+          <p className="text-xs text-slate-500 mb-1.5">The Slack user group handle that gets pinged when a request is routed.</p>
           <input value={pingGroup} onChange={(e) => setPingGroup(e.target.value)} placeholder="e.g., @hai-conversion-on-call"
             className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400" />
         </div>
 
         <div>
-          <label className="block text-sm text-slate-300 mb-1">Triage Channel</label>
+          <label className="block text-sm text-slate-300 mb-1">Triage Channel ID</label>
           <p className="text-xs text-slate-500 mb-1.5">Where routed support requests get posted for your squad to review.</p>
-          {slackReady && channels.length > 0 ? (
-            <select value={triageChannel} onChange={(e) => setTriageChannel(e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400">
-              <option value="">Select a channel...</option>
-              {channels.map((ch) => (
-                <option key={ch.id} value={ch.id}>#{ch.name}</option>
-              ))}
-            </select>
-          ) : (
-            <>
-              <input value={triageChannel} onChange={(e) => setTriageChannel(e.target.value)} placeholder="e.g., C0XXXXXXXXX"
-                className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400" />
-              {!slackReady && (
-                <p className="text-xs text-amber-400/70 mt-1">Slack isn't connected yet -- enter the channel ID manually for now.</p>
-              )}
-            </>
-          )}
+          <input value={triageChannel} onChange={(e) => setTriageChannel(e.target.value)} placeholder="e.g., C0XXXXXXXXX"
+            className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-400" />
+          <div className="bg-slate-700/50 border border-slate-600 rounded p-2.5 mt-1.5">
+            <p className="text-xs text-slate-500">Click the channel name in Slack &rarr; scroll to the bottom &rarr; copy the Channel ID.</p>
+          </div>
         </div>
       </div>
 
