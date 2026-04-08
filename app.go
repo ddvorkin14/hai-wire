@@ -57,6 +57,20 @@ func (a *App) shutdown(ctx context.Context) {
 	}
 }
 
+// RefreshSlackToken re-reads the token from keychain.
+func (a *App) RefreshSlackToken() (string, error) {
+	if a.slack != nil {
+		a.slack.RefreshTokenIfNeeded()
+		team, err := a.slack.ValidateConnection()
+		if err != nil {
+			// Token might be expired even after refresh -- try full reconnect
+			return a.ReconnectSlack()
+		}
+		return team, nil
+	}
+	return a.ReconnectSlack()
+}
+
 func (a *App) tryConnectSlack() {
 	client, err := slackclient.NewClientFromKeychain()
 	if err != nil {

@@ -41,6 +41,8 @@ export function QueueMessage(arg1:string):Promise<void>;
 
 export function ReconnectSlack():Promise<string>;
 
+export function RefreshSlackToken():Promise<string>;
+
 export function RejectMessage(arg1:string):Promise<void>;
 
 export function ResetToDefaultCategories():Promise<void>;

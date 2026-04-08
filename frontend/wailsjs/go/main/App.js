@@ -74,6 +74,10 @@ export function ReconnectSlack() {
   return window['go']['main']['App']['ReconnectSlack']();
 }
 
+export function RefreshSlackToken() {
+  return window['go']['main']['App']['RefreshSlackToken']();
+}
+
 export function RejectMessage(arg1) {
   return window['go']['main']['App']['RejectMessage'](arg1);
 }

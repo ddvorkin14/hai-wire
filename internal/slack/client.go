@@ -25,6 +25,7 @@ type Client struct {
 }
 
 // NewClientFromKeychain creates a Slack client using Claude Code's stored token.
+// The token is re-read from keychain on each API call if it has expired.
 func NewClientFromKeychain() (*Client, error) {
 	token, err := ReadSlackTokenFromKeychain()
 	if err != nil {
@@ -78,6 +79,19 @@ func NewClient(token string) *Client {
 	return c
 }
 
+// RefreshTokenIfNeeded re-reads the token from keychain if the current one has expired.
+func (c *Client) RefreshTokenIfNeeded() {
+	newToken, err := ReadSlackTokenFromKeychain()
+	if err != nil {
+		return
+	}
+	if newToken != c.token {
+		log.Printf("Slack token refreshed from keychain")
+		c.token = newToken
+		c.api = slack.New(newToken)
+	}
+}
+
 // ValidateConnection checks the token works and returns the workspace name.
 func (c *Client) ValidateConnection() (string, error) {
 	resp, err := c.api.AuthTest()
@@ -118,6 +132,7 @@ func (c *Client) ListChannels() ([]ChannelInfo, error) {
 }
 
 func (c *Client) FetchNewMessages(channelID, oldest string) ([]slack.Message, error) {
+	c.RefreshTokenIfNeeded()
 	limit := 50
 	if oldest == "" {
 		limit = 100 // Fetch more on initial load for better mention extraction
@@ -135,6 +150,7 @@ func (c *Client) FetchNewMessages(channelID, oldest string) ([]slack.Message, er
 }
 
 func (c *Client) ReplyInThread(channelID, threadTS, text string) error {
+	c.RefreshTokenIfNeeded()
 	_, _, err := c.api.PostMessage(channelID,
 		slack.MsgOptionText(text, false),
 		slack.MsgOptionTS(threadTS),
@@ -143,6 +159,7 @@ func (c *Client) ReplyInThread(channelID, threadTS, text string) error {
 }
 
 func (c *Client) PostToChannel(channelID, text string) error {
+	c.RefreshTokenIfNeeded()
 	_, _, err := c.api.PostMessage(channelID,
 		slack.MsgOptionText(text, false),
 	)
