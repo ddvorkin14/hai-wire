@@ -38,15 +38,19 @@ export function LiveFeed() {
   const [refreshInterval, setRefreshInterval] = useState(5000);
   const [countdown, setCountdown] = useState(5);
   const [refreshing, setRefreshing] = useState(false);
+  const [fetchError, setFetchError] = useState('');
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
   const countdownRef = useRef<ReturnType<typeof setInterval>>();
 
   const loadMessages = useCallback(() => {
     setRefreshing(true);
+    setFetchError('');
     GetProcessedMessages(50).then((msgs) => {
       if (msgs && msgs.length > 0) {
         setEvents(msgs.map(mapMessage));
       }
+    }).catch((e) => {
+      setFetchError(e?.message || 'Failed to fetch messages');
     }).finally(() => {
       setTimeout(() => setRefreshing(false), 300);
     });
@@ -166,9 +170,10 @@ export function LiveFeed() {
             ))}
           </div>
           <button onClick={() => { loadMessages(); setCountdown(Math.round(refreshInterval / 1000)); }}
-            className={`px-3 py-1.5 rounded text-sm font-medium bg-slate-700 text-slate-300 hover:bg-slate-600 ${refreshing ? 'opacity-50' : ''}`}
+            className="px-3 py-1.5 rounded text-sm font-medium bg-slate-700 text-slate-300 hover:bg-slate-600 relative"
             title="Refresh now">
-            {refreshing ? 'Refreshing...' : 'Refresh'}
+            Refresh
+            {refreshing && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-400 rounded-full animate-pulse" />}
           </button>
           <button onClick={toggle}
             className={`px-4 py-1.5 rounded text-sm font-medium ${
@@ -179,10 +184,10 @@ export function LiveFeed() {
         </div>
       </div>
 
-      {/* Loading bar */}
-      {refreshing && (
-        <div className="h-0.5 bg-slate-700 rounded mb-2 overflow-hidden">
-          <div className="h-full bg-amber-400 animate-pulse w-full" />
+      {/* Error */}
+      {fetchError && (
+        <div className="text-xs text-red-400 bg-red-900/20 border border-red-700/30 rounded px-3 py-1.5 mb-3">
+          {fetchError}
         </div>
       )}
 
