@@ -25,6 +25,8 @@ func (s *Service) GetSquadName() (string, error)       { return s.db.GetConfig("
 func (s *Service) SetPingGroup(group string) error     { return s.db.SetConfig("ping_group", group) }
 func (s *Service) GetPingGroup() (string, error)       { return s.db.GetConfig("ping_group") }
 
+func (s *Service) SetRunbookText(text string) error    { return s.db.SetConfig("runbook_text", text) }
+func (s *Service) GetRunbookText() (string, error)     { return s.db.GetConfig("runbook_text") }
 func (s *Service) SetAckReplyEnabled(val string) error { return s.db.SetConfig("ack_reply_enabled", val) }
 func (s *Service) GetAckReplyEnabled() (string, error) {
 	val, err := s.db.GetConfig("ack_reply_enabled")

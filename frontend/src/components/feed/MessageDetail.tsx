@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { GetMessageDetail, QueueMessage, ApproveMessage, UnrouteMessage } from '../../../wailsjs/go/main/App';
+import { GetMessageDetail, GetNextSteps, QueueMessage, ApproveMessage, UnrouteMessage } from '../../../wailsjs/go/main/App';
 import { ConfidenceBadge } from '../shared/ConfidenceBadge';
 import type { TriageEvent } from '../../types';
 
@@ -20,6 +20,8 @@ export function MessageDetail({ event, onClose, onUpdate }: Props) {
   const [permalink, setPermalink] = useState('');
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
+  const [nextSteps, setNextSteps] = useState('');
+  const [loadingSteps, setLoadingSteps] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -27,6 +29,12 @@ export function MessageDetail({ event, onClose, onUpdate }: Props) {
       setReplies(detail?.replies || []);
       setPermalink(detail?.permalink || '');
     }).catch(() => {}).finally(() => setLoading(false));
+
+    // Load AI-generated next steps
+    setLoadingSteps(true);
+    GetNextSteps(event.category, event.summary, statusLabel).then((steps) => {
+      setNextSteps(steps || '');
+    }).catch(() => {}).finally(() => setLoadingSteps(false));
   }, [event.message_ts]);
 
   const handleAction = async (action: 'queue' | 'approve' | 'unroute') => {
@@ -167,62 +175,13 @@ export function MessageDetail({ event, onClose, onUpdate }: Props) {
           {/* Next Steps */}
           <div className="p-5">
             <h4 className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-3">Suggested Next Steps</h4>
-            <div className="space-y-2">
-              {statusLabel === 'classified' && (
-                <>
-                  <div className="flex items-start gap-2 text-xs text-slate-400">
-                    <span className="text-amber-400 mt-0.5">1.</span>
-                    <span>Review the classification and confidence reasoning above</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-xs text-slate-400">
-                    <span className="text-amber-400 mt-0.5">2.</span>
-                    <span>If this belongs to your squad, click "Send to Queue"</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-xs text-slate-400">
-                    <span className="text-amber-400 mt-0.5">3.</span>
-                    <span>If not, no action needed -- it will stay in the feed for reference</span>
-                  </div>
-                </>
-              )}
-              {statusLabel === 'pending' && (
-                <>
-                  <div className="flex items-start gap-2 text-xs text-slate-400">
-                    <span className="text-amber-400 mt-0.5">1.</span>
-                    <span>Review the thread for additional context</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-xs text-slate-400">
-                    <span className="text-amber-400 mt-0.5">2.</span>
-                    <span>Click "Approve & Route" to post to your triage channel with @mention</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-xs text-slate-400">
-                    <span className="text-amber-400 mt-0.5">3.</span>
-                    <span>Or head to the Review Queue tab to batch-approve pending items</span>
-                  </div>
-                </>
-              )}
-              {statusLabel === 'approved' && (
-                <>
-                  <div className="flex items-start gap-2 text-xs text-slate-400">
-                    <span className="text-green-400 mt-0.5">&#10003;</span>
-                    <span>This request has been routed to your triage channel</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-xs text-slate-400">
-                    <span className="text-amber-400 mt-0.5">1.</span>
-                    <span>Check the thread for updates from your team</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-xs text-slate-400">
-                    <span className="text-amber-400 mt-0.5">2.</span>
-                    <span>If routed incorrectly, click "Undo Route"</span>
-                  </div>
-                </>
-              )}
-              {statusLabel === 'rejected' && (
-                <div className="flex items-start gap-2 text-xs text-slate-400">
-                  <span className="text-slate-500 mt-0.5">--</span>
-                  <span>This request was skipped. No action needed.</span>
-                </div>
-              )}
-            </div>
+            {loadingSteps ? (
+              <p className="text-xs text-slate-600 animate-pulse">Generating next steps with AI...</p>
+            ) : nextSteps ? (
+              <div className="text-xs text-slate-400 whitespace-pre-wrap leading-relaxed">{nextSteps}</div>
+            ) : (
+              <p className="text-xs text-slate-600">No next steps available. Upload a runbook in Setup to enable AI-generated guidance.</p>
+            )}
           </div>
         </div>
       </div>

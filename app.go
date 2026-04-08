@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -255,11 +256,14 @@ func (a *App) GetAllCategories() []classifier.Category {
 }
 
 // AnalyzeDocument sends document text to Claude and extracts categories from it.
+// Also saves the document text for next-steps generation.
 func (a *App) AnalyzeDocument(documentText string) ([]classifier.ExtractedCategory, error) {
 	apiKey, _ := a.config.GetAnthropicKey()
 	if apiKey == "" {
 		return nil, fmt.Errorf("Anthropic API key not set -- configure it in Settings first")
 	}
+	// Save the runbook text for later use in next-steps
+	a.config.SetRunbookText(documentText)
 	return classifier.ExtractCategoriesFromDocument(a.ctx, apiKey, documentText)
 }
 
@@ -414,6 +418,16 @@ func (a *App) DeleteAutoApprovalRule(id int64) error {
 	return a.db.DeleteAutoApprovalRule(id)
 }
 
+// GetNextSteps generates context-aware next steps using Claude + the uploaded runbook.
+func (a *App) GetNextSteps(category, summary, status string) (string, error) {
+	apiKey, _ := a.config.GetAnthropicKey()
+	if apiKey == "" {
+		return "", fmt.Errorf("API key not set")
+	}
+	runbook, _ := a.config.GetRunbookText()
+	return classifier.GenerateNextSteps(a.ctx, apiKey, runbook, category, summary, status)
+}
+
 // GetMessageDetail returns full details for a message including thread replies.
 func (a *App) GetMessageDetail(messageTS string) (map[string]interface{}, error) {
 	if a.slack == nil {
@@ -549,6 +563,10 @@ func (a *App) pollLoop(ctx context.Context) {
 	}
 }
 
+func sendNotification(title, body string) {
+	exec.Command("osascript", "-e", fmt.Sprintf(`display notification "%s" with title "HAI-Wire" subtitle "%s"`, body, title)).Start()
+}
+
 func (a *App) processMessage(ctx context.Context, cls *classifier.Classifier, ts, userID, text, watchChannel, triageChannel, pingGroup string, threshold float64, ownedCats map[string]string) {
 	processed, _ := a.db.IsMessageProcessed(ts)
 	if processed {
@@ -595,4 +613,9 @@ func (a *App) processMessage(ctx context.Context, cls *classifier.Classifier, ts
 		"routed":     routed,
 		"status":     status,
 	})
+
+	// Send native notification when something is queued
+	if status == "pending" {
+		sendNotification("New item in queue", fmt.Sprintf("%s - %s (%d%%)", authorName, result.Summary, int(result.Confidence*100)))
+	}
 }

@@ -30,6 +30,10 @@ export function GetMessageDetail(arg1) {
   return window['go']['main']['App']['GetMessageDetail'](arg1);
 }
 
+export function GetNextSteps(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetNextSteps'](arg1, arg2, arg3);
+}
+
 export function GetOwnedCategories() {
   return window['go']['main']['App']['GetOwnedCategories']();
 }
