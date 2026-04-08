@@ -6,9 +6,10 @@ import type { TriageEvent } from '../../types';
 interface Props {
   event: TriageEvent;
   onRouted?: () => void;
+  onClick?: () => void;
 }
 
-export function MessageCard({ event, onRouted }: Props) {
+export function MessageCard({ event, onRouted, onClick }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [routing, setRouting] = useState(false);
   const [unrouting, setUnrouting] = useState(false);
@@ -49,7 +50,7 @@ export function MessageCard({ event, onRouted }: Props) {
 
   return (
     <button
-      onClick={() => setExpanded(!expanded)}
+      onClick={() => onClick ? onClick() : setExpanded(!expanded)}
       className={`w-full text-left p-4 rounded-lg border transition-colors ${
         routed ? 'bg-slate-800 border-amber-400/30' : 'bg-slate-800/50 border-slate-700'
       } hover:border-slate-500`}

@@ -14,6 +14,8 @@ import (
 	"hai-wire/internal/db"
 	slackclient "hai-wire/internal/slack"
 
+	"github.com/slack-go/slack"
+
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -410,6 +412,49 @@ func (a *App) SaveAutoApprovalRule(categoryKey string, minConfidence float64, en
 
 func (a *App) DeleteAutoApprovalRule(id int64) error {
 	return a.db.DeleteAutoApprovalRule(id)
+}
+
+// GetMessageDetail returns full details for a message including thread replies.
+func (a *App) GetMessageDetail(messageTS string) (map[string]interface{}, error) {
+	if a.slack == nil {
+		return nil, fmt.Errorf("Slack not connected")
+	}
+
+	channelID, _ := a.config.GetWatchChannelID()
+
+	// Get thread replies
+	a.slack.RefreshTokenIfNeeded()
+	params := &slack.GetConversationRepliesParameters{
+		ChannelID: channelID,
+		Timestamp: messageTS,
+		Limit:     50,
+	}
+	msgs, _, _, err := a.slack.GetAPI().GetConversationReplies(params)
+
+	var replies []map[string]interface{}
+	if err == nil {
+		for _, m := range msgs {
+			if m.Timestamp == messageTS {
+				continue // Skip the parent message
+			}
+			userName := a.slack.GetUserName(m.User)
+			replies = append(replies, map[string]interface{}{
+				"author": userName,
+				"text":   m.Text,
+				"ts":     m.Timestamp,
+			})
+		}
+	} else {
+		log.Printf("GetMessageDetail thread error: %v", err)
+	}
+
+	// Get permalink
+	permalink := a.slack.GetPermalink(channelID, messageTS)
+
+	return map[string]interface{}{
+		"replies":   replies,
+		"permalink": permalink,
+	}, nil
 }
 
 // --- Activity Log ---

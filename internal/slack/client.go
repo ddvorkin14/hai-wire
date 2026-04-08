@@ -79,6 +79,11 @@ func NewClient(token string) *Client {
 	return c
 }
 
+// GetAPI returns the underlying slack.Client for direct API access.
+func (c *Client) GetAPI() *slack.Client {
+	return c.api
+}
+
 // RefreshTokenIfNeeded re-reads the token from keychain if the current one has expired.
 func (c *Client) RefreshTokenIfNeeded() {
 	newToken, err := ReadSlackTokenFromKeychain()

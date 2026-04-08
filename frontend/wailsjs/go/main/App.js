@@ -26,6 +26,10 @@ export function GetAutoApprovalRules() {
   return window['go']['main']['App']['GetAutoApprovalRules']();
 }
 
+export function GetMessageDetail(arg1) {
+  return window['go']['main']['App']['GetMessageDetail'](arg1);
+}
+
 export function GetOwnedCategories() {
   return window['go']['main']['App']['GetOwnedCategories']();
 }

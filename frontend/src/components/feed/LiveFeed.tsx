@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { EventsOn } from '../../../wailsjs/runtime/runtime';
 import { IsMonitoring, StartMonitoring, StopMonitoring, GetProcessedMessages } from '../../../wailsjs/go/main/App';
 import { MessageCard } from './MessageCard';
+import { MessageDetail } from './MessageDetail';
 import type { TriageEvent, ProcessedMessage } from '../../types';
 
 type ConfidenceFilter = 'all' | 'high' | 'medium' | 'low';
@@ -39,6 +40,7 @@ export function LiveFeed() {
   const [countdown, setCountdown] = useState(5);
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState('');
+  const [selectedEvent, setSelectedEvent] = useState<TriageEvent | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
   const countdownRef = useRef<ReturnType<typeof setInterval>>();
 
@@ -266,9 +268,18 @@ export function LiveFeed() {
         ) : filtered.length === 0 ? (
           <div className="text-slate-500 text-sm text-center mt-12">No messages match your filters.</div>
         ) : (
-          filtered.map((event, i) => <MessageCard key={event.message_ts || i} event={event} onRouted={loadMessages} />)
+          filtered.map((event, i) => <MessageCard key={event.message_ts || i} event={event} onRouted={loadMessages} onClick={() => setSelectedEvent(event)} />)
         )}
       </div>
+
+      {/* Detail panel */}
+      {selectedEvent && (
+        <MessageDetail
+          event={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+          onUpdate={() => { loadMessages(); setSelectedEvent(null); }}
+        />
+      )}
     </div>
   );
 }

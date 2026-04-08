@@ -17,6 +17,8 @@ export function GetAllConfig():Promise<Record<string, string>>;
 
 export function GetAutoApprovalRules():Promise<Array<db.AutoApprovalRule>>;
 
+export function GetMessageDetail(arg1:string):Promise<Record<string, any>>;
+
 export function GetOwnedCategories():Promise<Record<string, string>>;
 
 export function GetPendingMessages():Promise<Array<db.ProcessedMessage>>;
