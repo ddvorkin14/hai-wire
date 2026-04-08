@@ -464,7 +464,7 @@ func (a *App) pollLoop(ctx context.Context) {
 			limit = len(initialMsgs)
 		}
 		for _, msg := range initialMsgs[:limit] {
-			if msg.BotID != "" || msg.ThreadTimestamp != "" || msg.SubType != "" || msg.Text == "" {
+			if msg.BotID != "" || (msg.ThreadTimestamp != "" && msg.ThreadTimestamp != msg.Timestamp) || msg.SubType != "" || msg.Text == "" {
 				continue
 			}
 			if msg.Timestamp > lastTS {
@@ -491,7 +491,7 @@ func (a *App) pollLoop(ctx context.Context) {
 			}
 
 			for _, msg := range messages {
-				if msg.BotID != "" || msg.ThreadTimestamp != "" || msg.SubType != "" || msg.Text == "" {
+				if msg.BotID != "" || (msg.ThreadTimestamp != "" && msg.ThreadTimestamp != msg.Timestamp) || msg.SubType != "" || msg.Text == "" {
 					continue
 				}
 				if msg.Timestamp <= lastTS {
