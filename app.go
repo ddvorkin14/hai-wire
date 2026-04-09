@@ -7,7 +7,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"hai-wire/internal/classifier"
@@ -19,6 +21,8 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+var slackChannelIDPattern = regexp.MustCompile(`^[CGDW][A-Z0-9]{8,}$`)
 
 type App struct {
 	ctx         context.Context
@@ -152,14 +156,33 @@ func (a *App) GetAllConfig() (map[string]string, error) {
 }
 
 func (a *App) SaveAnthropicKey(key string) error {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return fmt.Errorf("API key cannot be empty")
+	}
+	if !strings.HasPrefix(key, "sk-ant-") {
+		return fmt.Errorf("invalid Anthropic API key format (expected sk-ant-... prefix)")
+	}
 	return a.config.SetAnthropicKey(key)
 }
 
 func (a *App) SaveWatchChannel(channelID string) error {
+	channelID = strings.TrimSpace(channelID)
+	if !slackChannelIDPattern.MatchString(channelID) {
+		return fmt.Errorf("invalid Slack channel ID format: %q", channelID)
+	}
 	return a.config.SetWatchChannelID(channelID)
 }
 
 func (a *App) SaveSquadConfig(squadName, pingGroup, triageChannelID string) error {
+	squadName = strings.TrimSpace(squadName)
+	if squadName == "" {
+		return fmt.Errorf("squad name cannot be empty")
+	}
+	triageChannelID = strings.TrimSpace(triageChannelID)
+	if !slackChannelIDPattern.MatchString(triageChannelID) {
+		return fmt.Errorf("invalid triage channel ID format: %q", triageChannelID)
+	}
 	if err := a.config.SetSquadName(squadName); err != nil {
 		return err
 	}
@@ -199,6 +222,10 @@ func (a *App) SaveAckReplyEnabled(val string) error {
 }
 
 func (a *App) SaveConfidenceThreshold(threshold string) error {
+	val, err := strconv.ParseFloat(strings.TrimSpace(threshold), 64)
+	if err != nil || val < 0 || val > 1 {
+		return fmt.Errorf("confidence threshold must be a number between 0 and 1, got %q", threshold)
+	}
 	return a.config.SetConfidenceThreshold(threshold)
 }
 
@@ -518,13 +545,19 @@ func (a *App) pollLoop(ctx context.Context) {
 	thresholdStr, _ := a.config.GetConfidenceThreshold()
 	ownedCats, _ := a.db.GetOwnedCategories()
 
-	threshold, _ := strconv.ParseFloat(thresholdStr, 64)
-	if threshold == 0 {
+	threshold, err := strconv.ParseFloat(thresholdStr, 64)
+	if err != nil || threshold <= 0 || threshold > 1 {
 		threshold = 0.5
 	}
 
-	ticker := time.NewTicker(30 * time.Second)
+	const (
+		baseInterval = 30 * time.Second
+		maxBackoff   = 5 * time.Minute
+	)
+
+	ticker := time.NewTicker(baseInterval)
 	defer ticker.Stop()
+	consecutiveErrors := 0
 
 	log.Printf("Monitoring started: channel=%s, threshold=%.0f%%", watchChannel, threshold*100)
 
@@ -562,8 +595,20 @@ func (a *App) pollLoop(ctx context.Context) {
 		case <-ticker.C:
 			messages, err := a.slack.FetchNewMessages(watchChannel, lastTS)
 			if err != nil {
-				log.Printf("poll error: %v", err)
+				consecutiveErrors++
+				backoff := baseInterval * time.Duration(1<<uint(consecutiveErrors-1))
+				if backoff > maxBackoff {
+					backoff = maxBackoff
+				}
+				log.Printf("poll error (retry in %v): %v", backoff, err)
+				ticker.Reset(backoff)
 				continue
+			}
+
+			// Reset backoff on success
+			if consecutiveErrors > 0 {
+				consecutiveErrors = 0
+				ticker.Reset(baseInterval)
 			}
 
 			for _, msg := range messages {
@@ -581,7 +626,13 @@ func (a *App) pollLoop(ctx context.Context) {
 }
 
 func sendNotification(title, body string) {
-	exec.Command("osascript", "-e", fmt.Sprintf(`display notification "%s" with title "HAI-Wire" subtitle "%s"`, body, title)).Start()
+	// Sanitize inputs to prevent osascript injection — remove quotes and backslashes
+	sanitize := func(s string) string {
+		s = strings.ReplaceAll(s, `\`, `\\`)
+		s = strings.ReplaceAll(s, `"`, `\"`)
+		return s
+	}
+	exec.Command("osascript", "-e", fmt.Sprintf(`display notification "%s" with title "HAI-Wire" subtitle "%s"`, sanitize(body), sanitize(title))).Start()
 }
 
 func (a *App) processMessage(ctx context.Context, cls *classifier.Classifier, ts, userID, text, watchChannel, triageChannel, pingGroup string, threshold float64, ownedCats map[string]string) {
