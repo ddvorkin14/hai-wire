@@ -100,8 +100,20 @@ export function PingTargetPicker({ value, onChange }: Props) {
     onChange('');
   };
 
-  // Check if stored value is a proper ID or just a handle
-  const isProperID = value && (value.match(/^[US][A-Z0-9]+$/) || value.startsWith('<!'));
+  // Resolve display name when value is set but name isn't loaded yet
+  useEffect(() => {
+    if (value && !selectedName) {
+      // Try to find the name by searching for this exact ID
+      SearchMentionTargets('', 0).then((result) => {
+        if (result?.items) {
+          const match = result.items.find((t: any) => t.id === value);
+          if (match) setSelectedName(match.name);
+        }
+      }).catch(() => {});
+    }
+  }, [value]);
+
+  const isProperID = value && /^[US][A-Z0-9]+$/.test(value);
 
   // Show selected
   if (value) {
