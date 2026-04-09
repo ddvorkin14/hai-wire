@@ -73,6 +73,8 @@ export function StartMonitoring():Promise<void>;
 
 export function StopMonitoring():Promise<void>;
 
+export function TestNotification():Promise<void>;
+
 export function TestTriageChannel(arg1:string):Promise<string>;
 
 export function TestWatchChannel(arg1:string):Promise<string>;

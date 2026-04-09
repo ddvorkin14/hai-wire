@@ -36,16 +36,27 @@ export function PingTargetPicker({ value, onChange }: Props) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  const [error, setError] = useState('');
+
   const doSearch = useCallback(async (query: string, newOffset: number, append: boolean) => {
     setLoading(true);
+    setError('');
     try {
       const result = await SearchMentionTargets(query, newOffset);
       if (result) {
-        setResults((prev) => append ? [...prev, ...result.items] : (result.items || []));
-        setTotal(result.total);
-        setOffset(newOffset + (result.items?.length || 0));
+        const items = result.items || [];
+        setResults((prev) => append ? [...prev, ...items] : items);
+        setTotal(result.total || 0);
+        setOffset(newOffset + items.length);
       }
-    } catch {}
+    } catch (e: any) {
+      const msg = e?.message || String(e);
+      if (msg.includes('cache not loaded')) {
+        setError('Loading users... try again in a few seconds.');
+      } else {
+        setError(msg);
+      }
+    }
     setLoading(false);
   }, []);
 
@@ -122,9 +133,12 @@ export function PingTargetPicker({ value, onChange }: Props) {
       {open && (
         <div ref={listRef} onScroll={handleScroll}
           className="absolute z-20 w-full mt-1 bg-slate-700 border border-slate-600 rounded shadow-lg max-h-60 overflow-y-auto">
-          {results.length === 0 && !loading && (
+          {error && (
+            <div className="px-3 py-3 text-xs text-amber-400 text-center">{error}</div>
+          )}
+          {results.length === 0 && !loading && !error && (
             <div className="px-3 py-4 text-xs text-slate-500 text-center">
-              {search ? 'No results' : 'Type to search...'}
+              {search ? 'No results' : 'Start typing to search...'}
             </div>
           )}
           {results.map((t) => (

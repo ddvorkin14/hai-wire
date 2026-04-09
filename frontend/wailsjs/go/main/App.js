@@ -138,6 +138,10 @@ export function StopMonitoring() {
   return window['go']['main']['App']['StopMonitoring']();
 }
 
+export function TestNotification() {
+  return window['go']['main']['App']['TestNotification']();
+}
+
 export function TestTriageChannel(arg1) {
   return window['go']['main']['App']['TestTriageChannel'](arg1);
 }

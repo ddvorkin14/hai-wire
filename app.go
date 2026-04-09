@@ -177,6 +177,11 @@ func (a *App) GetOwnedCategories() (map[string]string, error) {
 	return a.db.GetOwnedCategories()
 }
 
+// TestNotification sends a test notification to verify they work.
+func (a *App) TestNotification() {
+	sendNotification("Test Notification", "If you see this, notifications are working!")
+}
+
 func (a *App) SaveAckReplyEnabled(val string) error {
 	return a.config.SetAckReplyEnabled(val)
 }

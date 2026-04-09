@@ -4,7 +4,7 @@ import {
   SaveSquadConfig, SaveOwnedCategories, SaveConfidenceThreshold, SaveWatchChannel,
   SaveAnthropicKey, SaveAckReplyEnabled,
   IsSlackConnected, GetSlackStatus, ReconnectSlack,
-  TestWatchChannel, TestTriageChannel,
+  TestWatchChannel, TestTriageChannel, TestNotification,
 } from '../../../wailsjs/go/main/App';
 import { PingTargetPicker } from './PingTargetPicker';
 import type { Category } from '../../types';
@@ -233,7 +233,7 @@ export function Settings() {
         {/* Behavior */}
         <section className="bg-slate-800 rounded-lg border border-slate-700 p-4">
           <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wide mb-3">Behavior</h3>
-          <label className="flex items-center justify-between cursor-pointer">
+          <label className="flex items-center justify-between cursor-pointer mb-4">
             <div>
               <div className="text-sm text-slate-300">Reply to routed posts</div>
               <div className="text-xs text-slate-500">Post an acknowledgment reply in the original thread when a request is routed.</div>
@@ -245,6 +245,16 @@ export function Settings() {
               className="accent-amber-400 w-4 h-4"
             />
           </label>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm text-slate-300">Desktop notifications</div>
+              <div className="text-xs text-slate-500">Get a macOS notification when a message is queued for review.</div>
+            </div>
+            <button onClick={() => TestNotification()}
+              className="bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs px-3 py-1.5 rounded">
+              Test
+            </button>
+          </div>
         </section>
 
         {/* Confidence */}
