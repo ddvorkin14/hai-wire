@@ -194,15 +194,19 @@ func (d *DB) GetPendingMessages() ([]ProcessedMessage, error) {
 
 // GetMessagesByStatus returns messages with a given status.
 func (d *DB) GetMessagesByStatus(status string, limit int) ([]ProcessedMessage, error) {
-	return d.queryMessages(fmt.Sprintf("SELECT id, message_ts, channel_id, author, category, confidence, summary, reasoning, routed, COALESCE(status,'classified'), created_at FROM processed_messages WHERE status = '%s' ORDER BY created_at DESC LIMIT %d", status, limit))
+	return d.queryMessages(
+		"SELECT id, message_ts, channel_id, author, category, confidence, summary, reasoning, routed, COALESCE(status,'classified'), created_at FROM processed_messages WHERE status = ? ORDER BY created_at DESC LIMIT ?",
+		status, limit)
 }
 
 func (d *DB) GetProcessedMessages(limit int) ([]ProcessedMessage, error) {
-	return d.queryMessages(fmt.Sprintf("SELECT id, message_ts, channel_id, author, category, confidence, summary, reasoning, routed, COALESCE(status,'classified'), created_at FROM processed_messages ORDER BY created_at DESC LIMIT %d", limit))
+	return d.queryMessages(
+		"SELECT id, message_ts, channel_id, author, category, confidence, summary, reasoning, routed, COALESCE(status,'classified'), created_at FROM processed_messages ORDER BY created_at DESC LIMIT ?",
+		limit)
 }
 
-func (d *DB) queryMessages(query string) ([]ProcessedMessage, error) {
-	rows, err := d.conn.Query(query)
+func (d *DB) queryMessages(query string, args ...interface{}) ([]ProcessedMessage, error) {
+	rows, err := d.conn.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +270,9 @@ func (d *DB) GetCustomCategories() ([]CustomCategory, error) {
 
 func (d *DB) HasCustomCategories() bool {
 	var count int
-	d.conn.QueryRow("SELECT COUNT(*) FROM custom_categories").Scan(&count)
+	if err := d.conn.QueryRow("SELECT COUNT(*) FROM custom_categories").Scan(&count); err != nil {
+		return false
+	}
 	return count > 0
 }
 
