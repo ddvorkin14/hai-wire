@@ -94,6 +94,10 @@ export function ResetToDefaultCategories() {
   return window['go']['main']['App']['ResetToDefaultCategories']();
 }
 
+export function ResolveMentionName(arg1) {
+  return window['go']['main']['App']['ResolveMentionName'](arg1);
+}
+
 export function SaveAckReplyEnabled(arg1) {
   return window['go']['main']['App']['SaveAckReplyEnabled'](arg1);
 }

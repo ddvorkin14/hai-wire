@@ -177,6 +177,18 @@ func (a *App) GetOwnedCategories() (map[string]string, error) {
 	return a.db.GetOwnedCategories()
 }
 
+// ResolveMentionName looks up a user/group ID and returns the display name.
+func (a *App) ResolveMentionName(id string) string {
+	if a.slack == nil || id == "" {
+		return id
+	}
+	// Try user lookup first
+	if len(id) > 0 && id[0] == 'U' {
+		return a.slack.GetUserName(id)
+	}
+	return id
+}
+
 // TestNotification sends a test notification to verify they work.
 func (a *App) TestNotification() {
 	sendNotification("Test Notification", "If you see this, notifications are working!")

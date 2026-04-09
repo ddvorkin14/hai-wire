@@ -51,6 +51,8 @@ export function RejectMessage(arg1:string):Promise<void>;
 
 export function ResetToDefaultCategories():Promise<void>;
 
+export function ResolveMentionName(arg1:string):Promise<string>;
+
 export function SaveAckReplyEnabled(arg1:string):Promise<void>;
 
 export function SaveAnthropicKey(arg1:string):Promise<void>;

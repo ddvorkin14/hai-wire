@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { SearchMentionTargets } from '../../../wailsjs/go/main/App';
+import { SearchMentionTargets, ResolveMentionName } from '../../../wailsjs/go/main/App';
 
 interface MentionTarget {
   id: string;
@@ -19,11 +19,21 @@ export function PingTargetPicker({ value, onChange }: Props) {
   const [total, setTotal] = useState(0);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [offset, setOffset] = useState(0);
-  const [selectedName, setSelectedName] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Resolve display name when component mounts with a value
+  useEffect(() => {
+    if (value && !displayName) {
+      ResolveMentionName(value).then((name) => {
+        if (name && name !== value) setDisplayName(name);
+      }).catch(() => {});
+    }
+  }, [value]);
 
   // Close on outside click
   useEffect(() => {
@@ -35,8 +45,6 @@ export function PingTargetPicker({ value, onChange }: Props) {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
-
-  const [error, setError] = useState('');
 
   const doSearch = useCallback(async (query: string, newOffset: number, append: boolean) => {
     setLoading(true);
@@ -52,7 +60,7 @@ export function PingTargetPicker({ value, onChange }: Props) {
     } catch (e: any) {
       const msg = e?.message || String(e);
       if (msg.includes('cache not loaded')) {
-        setError('Loading users... try again in a few seconds.');
+        setError('Loading workspace users... try again in a moment.');
       } else {
         setError(msg);
       }
@@ -68,12 +76,12 @@ export function PingTargetPicker({ value, onChange }: Props) {
       setResults([]);
       setOffset(0);
       doSearch(query, 0, false);
-    }, 200);
+    }, 250);
   };
 
   const handleFocus = () => {
     setOpen(true);
-    if (results.length === 0) {
+    if (results.length === 0 && !error) {
       doSearch(search, 0, false);
     }
   };
@@ -89,43 +97,33 @@ export function PingTargetPicker({ value, onChange }: Props) {
   };
 
   const handleSelect = (target: MentionTarget) => {
-    setSelectedName(target.name);
+    setDisplayName(target.name);
     setSearch('');
     setOpen(false);
+    setResults([]);
     onChange(target.id);
   };
 
   const handleClear = () => {
-    setSelectedName('');
+    setDisplayName('');
+    setSearch('');
+    setResults([]);
     onChange('');
   };
 
-  // Resolve display name when value is set but name isn't loaded yet
-  useEffect(() => {
-    if (value && !selectedName) {
-      // Try to find the name by searching for this exact ID
-      SearchMentionTargets('', 0).then((result) => {
-        if (result?.items) {
-          const match = result.items.find((t: any) => t.id === value);
-          if (match) setSelectedName(match.name);
-        }
-      }).catch(() => {});
-    }
-  }, [value]);
-
-  const isProperID = value && /^[US][A-Z0-9]+$/.test(value);
-
-  // Show selected
+  // Show selected state
   if (value) {
+    const isProperID = /^[US][A-Z0-9]+$/.test(value);
     return (
       <div>
         <div className="flex items-center gap-2 bg-amber-400/10 border border-amber-400/30 rounded px-3 py-2">
-          <span className="text-sm text-amber-400 flex-1">{selectedName || value}</span>
-          <button onClick={handleClear} className="text-slate-500 hover:text-red-400 text-xs">Change</button>
+          <span className="text-sm text-amber-400 flex-1">{displayName || value}</span>
+          <button onClick={handleClear}
+            className="text-slate-500 hover:text-red-400 text-xs">Change</button>
         </div>
         {!isProperID && (
           <p className="text-xs text-red-400 mt-1">
-            This looks like a handle, not a Slack ID. Mentions won't be clickable. Please re-select from the search.
+            Not a valid Slack ID. Re-select from the search for proper @mentions.
           </p>
         )}
       </div>
@@ -150,7 +148,7 @@ export function PingTargetPicker({ value, onChange }: Props) {
           )}
           {results.length === 0 && !loading && !error && (
             <div className="px-3 py-4 text-xs text-slate-500 text-center">
-              {search ? 'No results' : 'Start typing to search...'}
+              {search ? 'No results found' : 'Start typing to search...'}
             </div>
           )}
           {results.map((t) => (
@@ -170,7 +168,7 @@ export function PingTargetPicker({ value, onChange }: Props) {
           )}
           {!loading && results.length > 0 && offset < total && (
             <div className="px-3 py-1.5 text-xs text-slate-600 text-center border-t border-slate-600">
-              Showing {results.length} of {total} — scroll for more
+              Showing {results.length} of {total} -- scroll for more
             </div>
           )}
         </div>
