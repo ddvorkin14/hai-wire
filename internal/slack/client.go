@@ -18,6 +18,7 @@ type ChannelInfo struct {
 }
 
 type Client struct {
+	mu     sync.RWMutex
 	api    *slack.Client
 	token  string
 	teamID string
@@ -90,6 +91,8 @@ func (c *Client) RefreshTokenIfNeeded() {
 	if err != nil {
 		return
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if newToken != c.token {
 		log.Printf("Slack token refreshed from keychain")
 		c.token = newToken
@@ -350,10 +353,11 @@ func (c *Client) EnsureCacheLoaded(channelID string) {
 // SearchTargets returns filtered, paginated results from the cache.
 func (c *Client) SearchTargets(query string, offset, limit int) ([]MentionTarget, int, error) {
 	cacheMu.Lock()
+	loaded := cacheLoaded
 	all := cachedTargets
 	cacheMu.Unlock()
 
-	if !cacheLoaded {
+	if !loaded {
 		return nil, 0, fmt.Errorf("cache not loaded yet")
 	}
 
@@ -400,8 +404,13 @@ func (c *Client) fetchUsersHTTP() ([]rawUser, error) {
 	var allUsers []rawUser
 	cursor := ""
 
+	c.mu.RLock()
+	token := c.token
+	teamID := c.teamID
+	c.mu.RUnlock()
+
 	for page := 0; page < 50; page++ {
-		apiURL := fmt.Sprintf("https://slack.com/api/users.list?limit=200&team_id=%s", c.teamID)
+		apiURL := fmt.Sprintf("https://slack.com/api/users.list?limit=200&team_id=%s", teamID)
 		if cursor != "" {
 			apiURL += "&cursor=" + url.QueryEscape(cursor)
 		}
@@ -410,7 +419,7 @@ func (c *Client) fetchUsersHTTP() ([]rawUser, error) {
 		if err != nil {
 			return allUsers, err
 		}
-		req.Header.Set("Authorization", "Bearer "+c.token)
+		req.Header.Set("Authorization", "Bearer "+token)
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
