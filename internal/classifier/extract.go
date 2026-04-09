@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -19,6 +20,9 @@ type ExtractedCategory struct {
 // ExtractCategoriesFromDocument sends a document to Claude and asks it to extract
 // support categories that can be used for classification.
 func ExtractCategoriesFromDocument(ctx context.Context, apiKey, documentText string) ([]ExtractedCategory, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+
 	client := anthropic.NewClient(option.WithAPIKey(apiKey))
 
 	prompt := `You are analyzing a support runbook/document to extract issue categories for a triage system.

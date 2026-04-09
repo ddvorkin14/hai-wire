@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -11,6 +12,9 @@ import (
 
 // GenerateNextSteps uses Claude to suggest next steps based on the runbook and message context.
 func GenerateNextSteps(ctx context.Context, apiKey, runbookText, category, summary, status string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
 	client := anthropic.NewClient(option.WithAPIKey(apiKey))
 
 	var sb strings.Builder

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -40,6 +41,9 @@ func (c *Classifier) getCategories() []Category {
 }
 
 func (c *Classifier) Classify(ctx context.Context, messageText string) (*ClassificationResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
 	systemPrompt := buildSystemPromptFromCategories(c.getCategories())
 
 	msg, err := c.client.Messages.New(ctx, anthropic.MessageNewParams{
